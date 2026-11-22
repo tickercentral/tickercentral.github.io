@@ -110,7 +110,7 @@ button.picked { border-color: var(--fg); }
 const API = "";            // n8n webhook URL that remembers which charts an email has seen ("" = this browser only)
 const SUBSTACK = "";       // e.g. "https://tickercentral.substack.com"
 const INSTAGRAM = "";      // e.g. "https://instagram.com/tickercentral"
-const FREE_GAMES = 3;      // games before the email is needed
+const FREE_CHARTS = 3;     // charts (rounds) before the email is needed
 
 const KIND = { buy: "Buy", buyfail: "Buy", wait: "Wait", skip: "Skip" };
 const KIND_LABEL = { buy: "Complete setup that worked", buyfail: "Complete setup where the stop was hit", wait: "Almost ready, but not yet", skip: "No setup, too late" };
@@ -404,11 +404,13 @@ function hud() {
 }
 
 const played = () => store.get("bg-played", 0);
-const needsEmail = () => played() >= FREE_GAMES && !store.get("bg-email", null);
+const charts = () => store.get("bg-charts", 0);
+const needsEmail = () => charts() >= FREE_CHARTS && !store.get("bg-email", null);
+const leftText = () => { const l = Math.max(0, FREE_CHARTS - charts()); return l > 0 ? `${l} free chart${l === 1 ? "" : "s"} left. Then add your email to keep playing, still free.` : "Add your email to keep playing. Still free."; };
 
 function intro() {
   S = null; hud();
-  const best = store.get("bg-best", null), left = Math.max(0, FREE_GAMES - played());
+  const best = store.get("bg-best", null);
   $("#app").innerHTML = `<div class="intro">
     <h1>Read the chart.<br><span>Make the call.</span></h1>
     <p>Five real charts per game, picked from 10 years of more than 3,000 US stocks. Each chart stops on a decision day. You don't see the ticker or the date. Read the chart and decide: Buy, Wait or Skip. You never get the same chart twice.</p>
@@ -427,7 +429,7 @@ function intro() {
     </div>
     <p class="hint">Max 30 points per round, 150 per game. You score for reading the chart right, not for how it turned out.${best != null ? ` Your best so far: <b class="mono">${best}</b> of 150.` : ""}</p>
     <div class="btns"><button class="go" id="start">${played() ? "Play a new game" : "Start the first game"}</button></div>
-    ${!store.get("bg-email", null) ? `<p class="hint">${left > 0 ? `${left} free game${left === 1 ? "" : "s"} left. Then add your email to keep playing, still free.` : "Add your email to keep playing. Still free."}</p>` : ""}
+    ${!store.get("bg-email", null) ? `<p class="hint">${leftText()}</p>` : ""}
   </div>`;
   $("#start").onclick = start;
 }
@@ -439,11 +441,12 @@ async function start() {
   $("#app").innerHTML = ""; render(); window.scrollTo({ top: 0 });
 }
 
-function gate() {
-  S = null; hud();
+function gate(resume) {
+  if (!resume) S = null;
+  $("#hud").innerHTML = "";
   $("#app").innerHTML = `<div class="intro">
     <h1>Keep <span>playing.</span></h1>
-    <p>You have played your ${FREE_GAMES} free games. Add your email to keep going. It is still free.</p>
+    <p>You have played your ${FREE_CHARTS} free charts. Add your email to keep going. It is still free${resume ? ", and this game continues right where you left off" : ""}.</p>
     <form class="gate" id="gate" novalidate>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required aria-label="Email">
       <label><input type="checkbox" id="consent"> <span>Send me the free Ticker Central newsletter, and remember which charts I've seen so I always get new ones. I can unsubscribe at any time.</span></label>
@@ -462,7 +465,7 @@ function gate() {
     if (API && !res) { $("#gsend").disabled = false; $("#gsend").textContent = "Continue"; err.hidden = false; err.textContent = "Could not save right now. Try again in a minute."; return; }
     if (res && Array.isArray(res.seen)) store.set("bg-seen", [...new Set(seenLocal().concat(res.seen))]);
     store.set("bg-email", email);
-    start();
+    if (resume) { $("#app").innerHTML = ""; resume(); } else start();
   };
 }
 
@@ -604,6 +607,7 @@ function startReveal() {
   if (reduce) { S.revealN = c.bars.length; draw(); } else setTimeout(tick, 300);
 }
 function nextRound() {
+  store.set("bg-charts", charts() + 1);
   if (S.round === 4) {
     S.screen = "end";
     const best = store.get("bg-best", null), tot = total();
@@ -612,6 +616,7 @@ function nextRound() {
     return render();
   }
   S.round++; S.step = 0; S.answered = false; S.choice = null; S.pick = null; S.picks = {}; S.overlays = {}; S.revealN = null; S.zoom = false;
+  if (needsEmail()) { window.scrollTo({ top: 0 }); return gate(() => { render(); window.scrollTo({ top: 0 }); }); }
   render(); window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -619,13 +624,13 @@ function endScreen() {
   const tot = total(), best = store.get("bg-best", tot);
   const rows = S.cases.map((c, r) => { const p = S.pts[r]; return `<tr><td>${r + 1}. ${esc(c.ticker)} · ${KIND[c.kind]}</td><td>${Object.values(p).reduce((a, b) => a + b, 0)} / 30</td><td>${p.decision ? `<span style="color:var(--signal)">✓</span>` : `<span style="color:var(--red)">✗</span>`}</td></tr>`; }).join("");
   const msg = tot >= 130 ? "You read charts like a pro. Really strong." : tot >= 100 ? "Good reading. Look at the explanations where you lost points." : tot >= 70 ? "A good start. Play again and see if you spot the patterns faster." : "Every round teaches you something. Play again and read the explanations closely.";
-  const left = Math.max(0, FREE_GAMES - played()), hasEmail = !!store.get("bg-email", null);
+  const hasEmail = !!store.get("bg-email", null);
   $("#app").innerHTML = `<div class="intro">
     <div class="step">Your result</div>
     <div class="big">${tot}<span style="font-size:.35em;color:var(--muted)"> / 150</span></div>
     <p>${msg}${best > tot ? ` Your best is ${best}.` : ""}</p>
     <table class="tbl"><tbody>${rows}</tbody></table>
-    ${!hasEmail ? `<p class="hint">${left > 0 ? `${left} free game${left === 1 ? "" : "s"} left.` : "Your free games are used. Add your email to keep playing, still free."}</p>` : ""}
+    ${!hasEmail ? `<p class="hint">${leftText()}</p>` : ""}
     <div class="btns"><button class="go" id="again">Play again</button><button id="home">Home</button></div>
     ${SUBSTACK ? `<p class="hint">Want the setups explained every week? <a href="${SUBSTACK}" target="_blank" rel="noopener">Read Ticker Central on Substack</a>.</p>` : ""}
   </div>`;
