@@ -108,8 +108,8 @@ button.picked { border-color: var(--fg); }
 <script>
 // ---------- Settings ----------
 const API = "https://banna.app.n8n.cloud/webhook/breakout-game";            // n8n webhook URL that remembers which charts an email has seen ("" = this browser only)
-const SUBSTACK = "";       // e.g. "https://tickercentral.substack.com"
-const INSTAGRAM = "";      // e.g. "https://instagram.com/tickercentral"
+const SUBSTACK = "https://substack.com/@tickercentral";
+const INSTAGRAM = "https://www.instagram.com/ticker.central/";
 const FREE_CHARTS = 3;     // charts (rounds) before the email is needed
 
 const KIND = { buy: "Buy", buyfail: "Buy", wait: "Wait", skip: "Skip" };
@@ -449,17 +449,15 @@ function gate(resume) {
     <p>You have played your ${FREE_CHARTS} free charts. Add your email to keep going. It is still free${resume ? ", and this game continues right where you left off" : ""}.</p>
     <form class="gate" id="gate" novalidate>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required aria-label="Email">
-      <label><input type="checkbox" id="consent"> <span>Send me the free Ticker Central newsletter, and remember which charts I've seen so I always get new ones. I can unsubscribe at any time.</span></label>
       <div class="err" id="gerr" hidden></div>
-      <div><button class="go" type="submit" id="gsend">Continue</button></div>
-      <p class="hint" style="margin:0">We save your email and the ids of the charts you've played. Nothing else, no scores. We never sell or share it.</p>
+      <div><button class="go" type="submit" id="gsend">Subscribe &amp; keep playing</button></div>
+      <p class="hint" style="margin:0">You'll get the free Ticker Central newsletter, and we remember which charts you've seen so you always get new ones. Unsubscribe at any time. We never sell or share your email.</p>
     </form>
   </div>`;
   $("#gate").onsubmit = async ev => {
     ev.preventDefault();
     const email = $("#email").value.trim().toLowerCase(), err = $("#gerr");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.hidden = false; err.textContent = "That email doesn't look right."; return; }
-    if (!$("#consent").checked) { err.hidden = false; err.textContent = "Tick the box to continue."; return; }
     $("#gsend").disabled = true; $("#gsend").textContent = "Saving…";
     const res = await api({ action: "join", email, consent: true, add: seenLocal() });
     // if the server does not answer (down, or the monthly limit is used up) the player still gets in
