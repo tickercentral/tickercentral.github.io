@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Breakout Game</title>
+<meta name="description" content="Read real stock charts and decide: buy the breakout, wait, or skip. A free training game by Ticker Central.">
+<meta property="og:title" content="Breakout Game">
+<meta property="og:description" content="Real charts. No ticker, no date. Can you spot the breakout?">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: trading-terminal console. Chart sticks to the top on phones, the question panel scrolls under it; side by side on wide screens. */
+:root {
+  --bg: #05070A; --panel: #0D1117; --line: #1E2833; --fg: #F2F6F5; --muted: #8A97A0;
+  --signal: #00FF9D; --signal-pale: #0F2A22; --amber: #FFB020; --cyan: #29E0FF; --violet: #B070FF;
+  --red: #FF3B4E; --desk: #FFDCA8;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+a { color: var(--cyan); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: max(14px, env(safe-area-inset-top, 0px)) 40px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.brand { font-family: var(--display); font-size: 22px; letter-spacing: .02em; color: var(--fg); text-decoration: none; }
+.brand b { color: var(--signal); }
+.brand small { font: 400 11px var(--mono); color: var(--muted); letter-spacing: .06em; margin-left: 8px; }
+.hud { font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; gap: 14px; }
+.hud strong { color: var(--fg); font-weight: 600; }
+.game { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .game { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
+.chartbox { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-bottom: 6px; }
+.chart { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; touch-action: manipulation; position: relative; }
+.chart .ov { position: absolute; left: 0; top: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+.ohlc { min-height: 34px; padding: 0 2px 4px; font: 11px/1.5 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adr { font: 600 12px/1.4 var(--mono); color: var(--desk); padding: 0 2px 6px; font-variant-numeric: tabular-nums; }
+.adr span { color: var(--muted); font-weight: 400; }
+.ohlc b { color: var(--fg); } .ohlc i { font-style: normal; }
+.chart.picking { outline: 2px solid var(--amber); cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); padding-top: 6px; }
+.legend .mini { margin-left: auto; min-height: 30px; padding: 4px 10px; font: 600 12px var(--mono); border-color: var(--cyan); color: var(--cyan); }
+.legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+.panel { display: grid; gap: 12px; min-width: 0; }
+.step { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.q { font-family: var(--display); font-size: 21px; line-height: 1.25; }
+.hint { color: var(--muted); font-size: 14px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: 600 15px var(--body); color: var(--fg); background: var(--panel); border: 1px solid #33414F; border-radius: 6px; padding: 12px 18px; cursor: pointer; min-height: 46px; }
+button:hover:not(:disabled) { border-color: var(--signal); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: default; }
+button.go { background: var(--signal); color: #04110B; border-color: var(--signal); }
+button.go:hover:not(:disabled) { background: #5CFFC2; }
+button.choice { flex: 1 1 100px; }
+button.picked { border-color: var(--fg); }
+.fb { border: 1px solid var(--line); border-left: 4px solid var(--amber); background: var(--panel); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; }
+.fb.ok { border-left-color: var(--signal); }
+.fb .verdict { font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--amber); }
+.fb.ok .verdict { color: var(--signal); }
+.fb p { margin: 0; }
+.reveal-head { display: grid; gap: 4px; }
+.reveal-head h2 { font-size: 30px; color: var(--signal); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl td { padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tbl td:nth-child(2) { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.tbl td:last-child { text-align: right; width: 34px; }
+.score { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-family: var(--mono); font-size: 13px; }
+.score .tot { color: var(--signal); font-weight: 600; border-top: 1px solid var(--line); padding-top: 4px; }
+.intro { max-width: 680px; display: grid; gap: 16px; padding-top: 8px; }
+.intro h1 { font-size: clamp(34px, 8vw, 54px); line-height: 1; }
+.intro h1 span { color: var(--signal); }
+.intro ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.points { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.points div { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 13px; color: var(--muted); }
+.points b { display: block; font-family: var(--mono); color: var(--signal); font-size: 20px; }
+.big { font-family: var(--display); font-size: clamp(56px, 16vw, 96px); color: var(--signal); line-height: 1; }
+.gate { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: grid; gap: 12px; }
+.gate input[type=email] { font: 16px var(--body); color: var(--fg); background: var(--bg); border: 1px solid #33414F; border-radius: 6px; padding: 12px; width: 100%; min-height: 46px; }
+.gate label { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); cursor: pointer; }
+.gate input[type=checkbox] { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--signal); }
+.err { color: var(--red); font-size: 14px; }
+.foot { margin-top: 36px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); display: grid; gap: 4px; }
+.loading { color: var(--muted); font-family: var(--mono); padding: 40px 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="./">BREAKOUT <b>GAME</b><small>by Ticker Central</small></a>
+    <div class="hud" id="hud"></div>
+  </div>
+  <div id="app"><div class="loading">Loading…</div></div>
+  <div class="foot">
+    <div><b>Education only. Not financial advice.</b> The charts are real US stocks. What happened before says nothing about what happens next.</div>
+    <div id="footlinks"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+// ---------- Settings ----------
+const API = "";            // n8n webhook URL that remembers which charts an email has seen ("" = this browser only)
+const SUBSTACK = "";       // e.g. "https://tickercentral.substack.com"
+const INSTAGRAM = "";      // e.g. "https://instagram.com/tickercentral"
+const FREE_GAMES = 3;      // games before the email is needed
+
+const KIND = { buy: "Buy", buyfail: "Buy", wait: "Wait", skip: "Skip" };
+const KIND_LABEL = { buy: "Complete setup that worked", buyfail: "Complete setup where the stop was hit", wait: "Almost ready, but not yet", skip: "No setup, too late" };
+
+// ---------- Helpers ----------
+const $ = s => document.querySelector(s);
+const nf = (x, d = 2) => Number(x).toFixed(d).replace("-", "−");
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fDate = iso => { const [y, m, d] = iso.split("-"); return `${MON[+m - 1]} ${+d}, ${y}`; };
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+const fmtInt = x => Number(x).toLocaleString("en-US");
+
+// ---------- Cases (one file each, loaded when a game starts) ----------
+let INDEX = [];            // [[id, kind], ...]
+async function loadIndex() { INDEX = await (await fetch("cases/index.json", { cache: "no-cache" })).json(); }
+const getCase = id => fetch(`cases/${id}.json`).then(r => { if (!r.ok) throw new Error(id); return r.json(); });
+
+// ---------- Remembering seen charts (this browser + the email list) ----------
+const seenLocal = () => store.get("bg-seen", []);
+async function api(body) {
+  if (!API) return null;
+  try {
+    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(body) });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+async function syncSeen(add) {
+  const email = store.get("bg-email", null);
+  if (!email) return;
+  const res = await api({ action: "seen", email, add });
+  if (res && Array.isArray(res.seen)) store.set("bg-seen", [...new Set(seenLocal().concat(res.seen))]);
+}
+
+// ---------- Game state ----------
+let S;
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+// Every game: 2 setups that worked, 1 where the stop was hit, 1 Wait, 1 Skip. Charts you have seen are never picked again.
+async function newGame() {
+  let seen = new Set(seenLocal());
+  const ids = [];
+  for (const [kind, n] of [["buy", 2], ["buyfail", 1], ["wait", 1], ["skip", 1]]) {
+    const all = INDEX.filter(x => x[1] === kind).map(x => x[0]);
+    let fresh = all.filter(id => !seen.has(id));
+    if (fresh.length < n) fresh = all;          // seen them all: start over for that kind
+    ids.push(...shuffle(fresh).slice(0, n));
+  }
+  shuffle(ids);
+  const cases = await Promise.all(ids.map(getCase));
+  store.set("bg-seen", [...seen, ...ids]);
+  syncSeen(ids);
+  S = { screen: "round", cases, round: 0, step: 0, answered: false, pts: cases.map(() => ({})), overlays: {}, pick: null, picks: {}, choice: null, revealN: null };
+}
+const cur = () => S.cases[S.round];
+const total = () => S ? S.pts.reduce((s, r) => s + Object.values(r).reduce((a, b) => a + b, 0), 0) : 0;
+
+// ---------- The questions ----------
+function questions(c) {
+  const m = c.m, n = m.base_days;
+  const restOk = n >= 10 && n <= 42;
+  const tightOk = m.tight_adr <= 2;
+  const maOk = m.close > m.s10 && m.close > m.s20 && m.s10_up && m.s20_up;
+  return [
+    { id: "move", text: "Did it rise at least 30 % before the rest?", answer: m.prior_move >= 30, overlay: "pole",
+      why: `From the low of ${nf(m.pole_low)} to the top at ${nf(m.peak)} it rose +${m.prior_move} % in ${m.pole_days} trading days. The rule: at least 30 % in 1–3 months, ideally 100 % or more. The green arrow on the chart shows the move.` },
+    { id: "rest", text: "Has it rested 2 weeks to 2 months since the top?", hint: "Count the candles after the top. One candle is one trading day, and a week has 5 trading days (the market is closed on weekends). 2 weeks ≈ 10 candles, 2 months ≈ 42 candles.", answer: restOk, overlay: "base",
+      why: n === 0 ? `The top was set today. It has not rested a single day. The rule: 2 weeks to 2 months of rest, about 10–42 trading days.`
+        : n < 10 ? `Only ${n} trading days have passed since the top, so ${n < 5 ? "less than a week" : "just over a week"}. A week has 5 trading days, so 2 weeks is 10 trading days. The box on the chart shows the short rest.`
+        : `${n} trading days have passed since the top. A week has 5 trading days, so that is about ${nf(n / 5, n % 5 ? 1 : 0)} weeks. That is within 2 weeks to 2 months (10–42 trading days). The box on the chart is the base. At its deepest it was ${nf(m.depth, 1)} % below the top.` },
+    { id: "lows", text: "Is it making higher lows during the rest?", answer: m.higher_lows, overlay: "lows",
+      why: m.lows ? `The lowest point of the base is ${nf(m.lows[0][1])}. After that it turned at ${nf(m.lows[1][1])} and ${nf(m.lows[2][1])}, higher each time. That means the sellers are getting weaker. The arrows on the chart show the lows.`
+        : n === 0 ? `There is no base yet, so there are no lows to compare. Without rest there can be no higher lows.`
+        : `The base is only ${n} days long. That is too short to show a series of higher lows. Price has made just one swing down and up.` },
+    { id: "tight", text: "Are the last few days tight (small and calm)?", answer: tightOk, overlay: "tight",
+      why: `The last 5 days moved ${nf(m.range5, 1)} % from high to low. The stock normally moves ${nf(m.adr, 1)} % a day (ADR), so that is ${nf(m.tight_adr, 1)} ADR. You want tight days that shrink before the breakout. There is no official number, so the game counts about 2 ADR or less over 5 days as tight.`
+        + (m.contract ? ` The days are now ${nf(m.contract)} times the size of the earlier days in the base, so they are shrinking.` : "") },
+    { id: "ma", text: "Is price above a rising 10 and 20 MA?", answer: maOk, overlay: "ma",
+      why: (maOk ? `Price ${nf(m.close)} is above the 10 MA (${nf(m.s10)}) and the 20 MA (${nf(m.s20)}), and both lines are rising.${m.s10 > m.s20 ? " The 10 is above the 20." : ""}`
+          : `Not quite. Price is ${nf(m.close)}, the 10 MA ${nf(m.s10)} is ${m.s10_up ? "rising" : "falling"} and the 20 MA ${nf(m.s20)} is ${m.s20_up ? "rising" : "falling"}.${m.close <= m.s10 ? " Price is below the 10 MA." : ""}${m.close <= m.s20 ? " Price is below the 20 MA." : ""}`)
+        + ` You want the stock to surf on a rising 10 and 20 MA.`
+        + (m.ext > 2.5 ? ` But look at the distance: price is ${nf(m.ext, 1)} ADR above the 10 MA. It is not surfing on the line, it has lifted far away from it. We will come back to that.` : "") }
+  ];
+}
+const STEPS = ["move", "rest", "lows", "tight", "ma", "pivot", "stop", "decision", "reveal"];
+
+// ---------- The chart (TradingView's open-source Lightweight Charts + our own layer for markings) ----------
+const COL = { up: "#00FF9D", down: "#FF3B4E", ma10: "#29E0FF", ma20: "#FFB020", ma50: "#B070FF", grid: "#151D26", muted: "#8A97A0", fg: "#F2F6F5", desk: "#FFDCA8", amber: "#FFB020", signal: "#00FF9D", red: "#FF3B4E", cyan: "#29E0FF" };
+const LW = window.LightweightCharts;
+const T0 = 946857600;                       // fake dates: the real dates stay hidden until the answer
+const tOf = i => T0 + i * 86400, iOf = t => Math.round((t - T0) / 86400);
+const MS = { Solid: 0, Dotted: 1, Dashed: 2 };
+let CH = null;
+
+const chartH = w => w < 520 ? Math.round(Math.min(380, Math.max(290, w * 0.85))) : Math.round(Math.min(500, w * 0.62));
+const isRevealed = () => S && S.revealN != null;
+function relLabel(i) {
+  const c = cur(); if (!c || !c.dates[i]) return "";
+  if (isRevealed()) { const [y, mo, d] = c.dates[i].split("-"); return `${MON[+mo - 1]} ${+d}`; }
+  const r = i - c.dk, a = Math.abs(r), s = r < 0 ? "−" : "+";
+  if (r === 0) return "decision";
+  if (a < 5) return `${s}${a} d`;
+  if (a < 42) return `${s}${Math.round(a / 5)} w`;
+  return `${s}${Math.round(a / 21 * 2) / 2} mo`;
+}
+function crossLabel(i) {
+  const c = cur(); if (!c || !c.dates[i]) return "";
+  if (isRevealed()) return fDate(c.dates[i]);
+  const r = i - c.dk;
+  return r === 0 ? "decision day" : `${r < 0 ? "−" : "+"}${Math.abs(r)} trading days`;
+}
+
+function buildChart() {
+  const box = $("#chart"), c = cur();
+  if (CH) { try { CH.chart.remove(); } catch (e) {} CH.ro && CH.ro.disconnect(); }
+  box.innerHTML = `<svg class="ov" id="ov"></svg>`;
+  const w = Math.max(280, box.clientWidth);
+  box.style.height = chartH(w) + "px";
+  const chart = LW.createChart(box, {
+    width: w, height: chartH(w),
+    layout: { background: { type: "solid", color: "#0D1117" }, textColor: COL.muted, fontFamily: "JetBrains Mono, ui-monospace, monospace", fontSize: 11 },
+    grid: { vertLines: { color: COL.grid }, horzLines: { color: COL.grid } },
+    rightPriceScale: { borderColor: "#1E2833", scaleMargins: { top: 0.08, bottom: 0.2 } },
+    timeScale: { borderColor: "#1E2833", rightOffset: 4, barSpacing: 6, minBarSpacing: 1.5, tickMarkFormatter: t => relLabel(iOf(t)) },
+    localization: { locale: "en-US", timeFormatter: t => crossLabel(iOf(t)), priceFormatter: p => nf(p, p < 100 ? 2 : 1) },
+    crosshair: { mode: LW.CrosshairMode.Normal,
+      vertLine: { color: "#5A6B78", labelBackgroundColor: "#1E2833" }, horzLine: { color: "#5A6B78", labelBackgroundColor: "#1E2833" } },
+    handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+    handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: false }, axisDoubleClickReset: true },
+    watermark: { visible: true, text: "?", color: "rgba(138,151,160,0.07)", fontSize: 72, fontFamily: "Chakra Petch, sans-serif", horzAlign: "center", vertAlign: "center" }
+  });
+  const zoomScale = () => S && S.zoom && S.revealN == null;
+  const line = (color, width) => chart.addLineSeries({ color, lineWidth: width, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+    autoscaleInfoProvider: orig => zoomScale() ? null : orig() });
+  const vol = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
+  chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+  const ma50 = line(COL.ma50, 1), ma20 = line(COL.ma20, 1), ma10 = line(COL.ma10, 1);
+  const candle = chart.addCandlestickSeries({ upColor: COL.up, downColor: COL.down, borderVisible: false, wickUpColor: COL.up, wickDownColor: COL.down, priceLineVisible: false,
+    autoscaleInfoProvider: orig => {
+      if (zoomScale()) { // zoomed in: scale to the base so it shows large
+        const m = cur().m, d = cur().dk; let lo = Infinity, hi = -Infinity;
+        for (let i = Math.max(0, Math.min(m.peak_k, d - 10)); i <= d; i++) { lo = Math.min(lo, cur().bars[i][2]); hi = Math.max(hi, cur().bars[i][1]); }
+        [S.overlays.zone ? m.stop_max : null, S.pick, S.picks.pivot, S.picks.stop].forEach(v => { if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
+        const pad = (hi - lo) * 0.05; return { priceRange: { minValue: lo - pad, maxValue: hi + pad } };
+      }
+      const r = orig(); if (r && S && S.overlays.zone && S.revealN == null) r.priceRange.minValue = Math.min(r.priceRange.minValue, cur().m.stop_max * 0.995); return r; } });
+  CH = { chart, candle, vol, ma10, ma20, ma50, box, n: 0, round: S.round, game: S.cases, lines: [], zoomed: null, revealView: false, maThick: false };
+  const toPt = i => { const [o, h, l, cl] = c.bars[i]; return { time: tOf(i), open: o, high: h, low: l, close: cl }; };
+  CH.bar = i => ({ c: toPt(i), v: { time: tOf(i), value: c.bars[i][4], color: c.bars[i][3] >= c.bars[i][0] ? "rgba(0,255,157,.32)" : "rgba(255,59,78,.32)" },
+    m10: c.ma10[i] == null ? { time: tOf(i) } : { time: tOf(i), value: c.ma10[i] },
+    m20: c.ma20[i] == null ? { time: tOf(i) } : { time: tOf(i), value: c.ma20[i] },
+    m50: c.ma50[i] == null ? { time: tOf(i) } : { time: tOf(i), value: c.ma50[i] } });
+  const first = []; for (let i = 0; i <= c.dk; i++) first.push(CH.bar(i));
+  candle.setData(first.map(b => b.c)); vol.setData(first.map(b => b.v));
+  ma10.setData(first.map(b => b.m10)); ma20.setData(first.map(b => b.m20)); ma50.setData(first.map(b => b.m50));
+  CH.n = c.dk + 1;
+  const redraw = () => requestAnimationFrame(overlay);
+  chart.timeScale().subscribeVisibleLogicalRangeChange(redraw);
+  chart.timeScale().subscribeSizeChange(redraw);
+  chart.subscribeCrosshairMove(p => { ohlc(p); });
+  chart.subscribeClick(onChartClick);
+  CH.ro = new ResizeObserver(() => { const nw = Math.max(280, box.clientWidth); if (Math.abs(nw - chart.options().width) > 1) { box.style.height = chartH(nw) + "px"; chart.applyOptions({ width: nw, height: chartH(nw) }); redraw(); } });
+  CH.ro.observe(box);
+}
+
+function applyRange() {
+  const c = cur(), m = c.m, w = CH.box.clientWidth, ts = CH.chart.timeScale();
+  if (isRevealed()) {
+    if (!CH.revealView) { CH.revealView = true; ts.setVisibleLogicalRange({ from: Math.max(0, w < 520 ? Math.min(m.pole_k - 6, c.dk - 100) : 0) - 1, to: c.bars.length + 2 }); }
+    return;
+  }
+  if (CH.zoomed === !!S.zoom) return;
+  CH.zoomed = !!S.zoom;
+  const from = S.zoom ? Math.max(0, Math.min(m.peak_k, c.dk - 25) - 12) : w < 520 ? Math.max(0, Math.min(m.pole_k - 6, c.dk - 100)) : 0;
+  ts.setVisibleLogicalRange({ from: from - 1, to: c.dk + (S.zoom ? 4 : 6) });
+}
+
+function draw() {
+  const box = $("#chart"); if (!box || !S) return;
+  const c = cur(), m = c.m, ov = S.overlays;
+  if (!CH || CH.box !== box || CH.round !== S.round || CH.game !== S.cases) buildChart();
+  // data: add the days after the decision as the answer rolls forward
+  const target = isRevealed() ? S.revealN : c.dk + 1;
+  while (CH.n < target) { const b = CH.bar(CH.n); CH.candle.update(b.c); CH.vol.update(b.v); CH.ma10.update(b.m10); CH.ma20.update(b.m20); CH.ma50.update(b.m50); CH.n++; }
+  if (CH.maThick !== !!ov.ma) { CH.maThick = !!ov.ma; CH.ma10.applyOptions({ lineWidth: ov.ma ? 2 : 1 }); CH.ma20.applyOptions({ lineWidth: ov.ma ? 2 : 1 }); }
+  CH.chart.applyOptions({ watermark: isRevealed() ? { text: c.ticker, color: "rgba(0,255,157,0.10)" } : { text: "?", color: "rgba(138,151,160,0.07)" } });
+  // price lines (with a label on the price axis)
+  CH.lines.forEach(l => CH.candle.removePriceLine(l)); CH.lines = [];
+  const pl = (price, color, title, style = MS.Solid, width = 1) => CH.lines.push(CH.candle.createPriceLine({ price, color, lineWidth: width, lineStyle: style, axisLabelVisible: true, title }));
+  if (ov.pivot) pl(m.peak, COL.fg, "ceiling", MS.Solid, 2);
+  if (ov.zone) pl(m.stop_max, COL.red, "1 ADR");
+  if (S.picks.pivot != null) pl(S.picks.pivot, COL.desk, S.step === 5 ? "your ceiling" : "", MS.Dashed);
+  if (S.picks.stop != null) pl(S.picks.stop, COL.desk, S.step === 6 ? "your stop" : "", MS.Dashed);
+  if (S.pick != null) pl(S.pick, COL.amber, S.step === 5 ? "ceiling?" : "stop?", MS.Dashed, 2);
+  applyRange();
+  ohlc(null);
+  requestAnimationFrame(overlay);
+  // ADR help on the questions that need it: tight, ceiling, stop, decision and the answer
+  const ad = $("#adr");
+  if (ad) {
+    ad.hidden = !([3, 5, 6, 7].includes(S.step) || isRevealed());
+    const one = m.close * m.adr / 100;
+    ad.innerHTML = `ADR ${nf(m.adr, 1)} % · 1 ADR ≈ $${nf(one)} <span>= a normal day's move at today's price of ${nf(m.close)}</span>`;
+  }
+  const zb = $("#zoom"); if (zb) { zb.hidden = isRevealed(); zb.textContent = S.zoom ? "Show whole chart" : "Zoom in on the base"; }
+  box.classList.toggle("picking", (S.step === 5 || S.step === 6) && !S.answered);
+}
+
+// O/H/L/C row at the top left, like on a trading platform
+function ohlc(p) {
+  const el = $("#ohlc"); if (!el || !CH) return;
+  const c = cur();
+  let i = p && p.time != null ? iOf(p.time) : CH.n - 1;
+  if (i < 0 || i >= CH.n) i = CH.n - 1;
+  const [o, h, l, cl, v] = c.bars[i], prev = i ? c.bars[i - 1][3] : o, ch = 100 * (cl / prev - 1);
+  const col = cl >= o ? "var(--signal)" : "var(--red)";
+  const vs = v >= 1e6 ? nf(v / 1e6, 1) + "M" : nf(v / 1e3, 0) + "K";
+  el.innerHTML = `<b>${isRevealed() ? c.ticker : "???"}</b> · 1D · <span>${crossLabel(i)}</span><br>`
+    + `O <i style="color:${col}">${nf(o)}</i> H <i style="color:${col}">${nf(h)}</i> L <i style="color:${col}">${nf(l)}</i> C <i style="color:${col}">${nf(cl)}</i> <i style="color:${col}">${ch >= 0 ? "+" : ""}${nf(ch)} %</i> · Vol ${vs}`;
+}
+
+// Our own layer on top of the chart for the answer markings
+function overlay() {
+  if (!CH || !S || S.screen !== "round") return;
+  const svg = $("#ov"); if (!svg) return;
+  const c = cur(), m = c.m, ov = S.overlays, ts = CH.chart.timeScale();
+  const W = CH.box.clientWidth - CH.chart.priceScale("right").width(), H = CH.box.clientHeight - ts.height();
+  svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const X = i => ts.logicalToCoordinate(i), Y = p => CH.candle.priceToCoordinate(p);
+  const cw = Math.max(2, (X(c.dk) - X(c.dk - 10)) / 10);
+  if (X(c.dk) == null || Y(m.peak) == null) { svg.innerHTML = ""; return; }
+  const out = [];
+  const t = (x, y, s, col, anchor = "start", size = 11, weight = 600) =>
+    out.push(`<text x="${x}" y="${y}" fill="${col}" font-family="JetBrains Mono, monospace" font-size="${size}" font-weight="${weight}" text-anchor="${anchor}" paint-order="stroke" stroke="#0D1117" stroke-width="3">${s}</text>`);
+  if (isRevealed()) {
+    const x0 = X(c.dk) + cw / 2;
+    out.push(`<rect x="${x0}" y="0" width="${Math.max(0, W - x0)}" height="${H}" fill="#29E0FF" fill-opacity=".04"/>`);
+    out.push(`<line x1="${x0}" x2="${x0}" y1="0" y2="${H}" stroke="${COL.muted}" stroke-dasharray="3 4"/>`);
+    t(x0 + 4, H - 6, "after the decision →", COL.muted, "start", 10, 400);
+  }
+  if (ov.base && m.base_days > 0) {
+    const x0 = X(m.peak_k) + cw / 2, x1 = X(c.dk) + cw / 2;
+    out.push(`<rect x="${x0}" y="${Y(m.peak)}" width="${Math.max(2, x1 - x0)}" height="${Math.max(2, Y(m.base_low) - Y(m.peak))}" fill="${COL.cyan}" fill-opacity=".08" stroke="${COL.cyan}" stroke-width="1.2" stroke-dasharray="4 3"/>`);
+    t(x0 + 2, Y(m.peak) - 6, `rest ${m.base_days} days`, COL.cyan);
+  } else if (ov.base) t(X(c.dk) - 6, Y(m.peak) - 8, "rest 0 d", COL.cyan, "end");
+  if (ov.tight) {
+    let th = -Infinity, tl = Infinity; for (let i = c.dk - 4; i <= c.dk; i++) { th = Math.max(th, c.bars[i][1]); tl = Math.min(tl, c.bars[i][2]); }
+    const x0 = X(c.dk - 4) - cw * 0.6, x1 = X(c.dk) + cw * 0.6;
+    out.push(`<rect x="${x0}" y="${Y(th)}" width="${x1 - x0}" height="${Y(tl) - Y(th)}" fill="${COL.amber}" fill-opacity=".14" stroke="${COL.amber}" stroke-width="1.2"/>`);
+    t(x1, Math.max(Y(tl) + 14, Y(m.base_low) + 30), `5 d: ${nf(m.tight_adr, 1)} ADR`, COL.amber, "end");
+  }
+  if (ov.zone && !isRevealed()) {
+    out.push(`<rect x="0" y="${Y(m.peak)}" width="${W}" height="${Math.max(0, Y(m.stop_max) - Y(m.peak))}" fill="${COL.red}" fill-opacity=".09"/>`);
+  }
+  if (ov.pole) {
+    const x0 = X(m.pole_k), y0 = Y(m.pole_low), x1 = X(m.peak_k), y1 = Y(m.peak);
+    const ang = Math.atan2(y1 - y0, x1 - x0), a = 10;
+    out.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${COL.signal}" stroke-width="2.5"/>`);
+    out.push(`<polygon points="${x1},${y1} ${x1 - a * Math.cos(ang - .4)},${y1 - a * Math.sin(ang - .4)} ${x1 - a * Math.cos(ang + .4)},${y1 - a * Math.sin(ang + .4)}" fill="${COL.signal}"/>`);
+    t((x0 + x1) / 2 - 8, (y0 + y1) / 2, `+${m.prior_move} %`, COL.signal, "end", 13);
+    t((x0 + x1) / 2 - 8, (y0 + y1) / 2 + 14, `${m.pole_days} days`, COL.signal, "end", 10, 400);
+  }
+  if (ov.lows && m.lows) {
+    m.lows.forEach(([k, p], j) => { const x = X(k), y = Y(p) + 5; out.push(`<polygon points="${x},${y} ${x - 5},${y + 9} ${x + 5},${y + 9}" fill="${j ? COL.signal : COL.fg}"/>`); });
+    t(X(m.lows[0][0]) - 4, Y(m.base_low) + 46, "▲ higher lows", COL.signal, "start", 10);
+  }
+  if (isRevealed() && c.entry && c.entry.k != null && c.entry.k < S.revealN) {
+    const e = c.entry, x = X(e.k), xe = X(Math.min(S.revealN - 1, e.exit_k != null ? e.exit_k : c.bars.length - 1));
+    out.push(`<rect x="${x - cw * .8}" y="0" width="${cw * 1.6}" height="${H}" fill="${COL.signal}" fill-opacity=".10"/>`);
+    out.push(`<line x1="${x - cw}" x2="${Math.max(x + cw, xe)}" y1="${Y(e.low)}" y2="${Y(e.low)}" stroke="${COL.red}" stroke-width="2"/>`);
+    t(x + 4, Y(e.low) + 14, `stop ${nf(e.low)}`, COL.red);
+    t(x, 14, "breakout", COL.signal, "middle", 10);
+  }
+  svg.innerHTML = out.join("");
+}
+
+function onChartClick(p) {
+  if (!(S && (S.step === 5 || S.step === 6) && !S.answered && p && p.point)) return;
+  const price = CH.candle.coordinateToPrice(p.point.y);
+  if (price == null) return;
+  S.pick = Math.round(price * 100) / 100;
+  draw(); panel(cur());
+}
+
+// ---------- Screens ----------
+function hud() {
+  if (!S || S.screen !== "round") { $("#hud").innerHTML = ""; return; }
+  $("#hud").innerHTML = `<span>Round <strong>${S.round + 1}</strong>/5</span><span>Score <strong>${total()}</strong></span>`;
+}
+
+const played = () => store.get("bg-played", 0);
+const needsEmail = () => played() >= FREE_GAMES && !store.get("bg-email", null);
+
+function intro() {
+  S = null; hud();
+  const best = store.get("bg-best", null), left = Math.max(0, FREE_GAMES - played());
+  $("#app").innerHTML = `<div class="intro">
+    <h1>Read the chart.<br><span>Make the call.</span></h1>
+    <p>Five real charts per game, picked from 10 years of more than 3,000 US stocks. Each chart stops on a decision day. You don't see the ticker or the date. Read the chart and decide: Buy, Wait or Skip. You never get the same chart twice.</p>
+    <ol>
+      <li><b>The checklist.</b> Five yes/no questions about the move, the rest, the lows, tightness and the moving averages.</li>
+      <li><b>The ceiling.</b> Tap the chart where the ceiling (pivot) is.</li>
+      <li><b>The stop.</b> Tap where the stop-loss should go.</li>
+      <li><b>The decision.</b> Buy, Wait or Skip.</li>
+    </ol>
+    <p>After every answer you get the explanation right away, drawn on the chart. After the decision the chart rolls forward 30 days and you see what happened.</p>
+    <div class="points">
+      <div><b>+2</b>per right answer in the checklist</div>
+      <div><b>+5</b>ceiling close to the right level</div>
+      <div><b>+5</b>stop within 1 ADR</div>
+      <div><b>+10</b>right decision</div>
+    </div>
+    <p class="hint">Max 30 points per round, 150 per game. You score for reading the chart right, not for how it turned out.${best != null ? ` Your best so far: <b class="mono">${best}</b> of 150.` : ""}</p>
+    <div class="btns"><button class="go" id="start">${played() ? "Play a new game" : "Start the first game"}</button></div>
+    ${!store.get("bg-email", null) ? `<p class="hint">${left > 0 ? `${left} free game${left === 1 ? "" : "s"} left. Then add your email to keep playing, still free.` : "Add your email to keep playing. Still free."}</p>` : ""}
+  </div>`;
+  $("#start").onclick = start;
+}
+
+async function start() {
+  if (needsEmail()) return gate();
+  $("#app").innerHTML = `<div class="loading">Picking five charts…</div>`;
+  try { await newGame(); } catch (e) { $("#app").innerHTML = `<div class="intro"><p class="err">Could not load the charts. Check your connection and try again.</p><div><button class="go" id="retry">Try again</button></div></div>`; $("#retry").onclick = start; return; }
+  $("#app").innerHTML = ""; render(); window.scrollTo({ top: 0 });
+}
+
+function gate() {
+  S = null; hud();
+  $("#app").innerHTML = `<div class="intro">
+    <h1>Keep <span>playing.</span></h1>
+    <p>You have played your ${FREE_GAMES} free games. Add your email to keep going. It is still free.</p>
+    <form class="gate" id="gate" novalidate>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required aria-label="Email">
+      <label><input type="checkbox" id="consent"> <span>Send me the free Ticker Central newsletter, and remember which charts I've seen so I always get new ones. I can unsubscribe at any time.</span></label>
+      <div class="err" id="gerr" hidden></div>
+      <div><button class="go" type="submit" id="gsend">Continue</button></div>
+      <p class="hint" style="margin:0">We save your email and the ids of the charts you've played. Nothing else, no scores. We never sell or share it.</p>
+    </form>
+  </div>`;
+  $("#gate").onsubmit = async ev => {
+    ev.preventDefault();
+    const email = $("#email").value.trim().toLowerCase(), err = $("#gerr");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.hidden = false; err.textContent = "That email doesn't look right."; return; }
+    if (!$("#consent").checked) { err.hidden = false; err.textContent = "Tick the box to continue."; return; }
+    $("#gsend").disabled = true; $("#gsend").textContent = "Saving…";
+    const res = await api({ action: "join", email, consent: true, add: seenLocal() });
+    if (API && !res) { $("#gsend").disabled = false; $("#gsend").textContent = "Continue"; err.hidden = false; err.textContent = "Could not save right now. Try again in a minute."; return; }
+    if (res && Array.isArray(res.seen)) store.set("bg-seen", [...new Set(seenLocal().concat(res.seen))]);
+    store.set("bg-email", email);
+    start();
+  };
+}
+
+function render() {
+  hud();
+  if (S.screen === "end") return endScreen();
+  const c = cur();
+  if (!$("#chart")) {
+    $("#app").innerHTML = `<div class="game">
+      <div class="chartbox"><div class="ohlc" id="ohlc"></div><div class="adr" id="adr" hidden></div><div class="chart" id="chart"></div>
+        <div class="legend"><span><i style="background:${COL.ma10}"></i>10 MA</span><span><i style="background:${COL.ma20}"></i>20 MA</span><span><i style="background:${COL.ma50}"></i>50 MA</span><span>drag = move · pinch = zoom</span><button class="mini" id="zoom" type="button"></button></div></div>
+      <div class="panel" id="panel"></div></div>`;
+    $("#zoom").onclick = () => { S.zoom = !S.zoom; draw(); };
+  }
+  draw();
+  panel(c);
+}
+
+function panel(c) {
+  const p = $("#panel"), stepId = STEPS[S.step], qs = questions(c), pts = S.pts[S.round];
+  if (S.step < 5) {
+    const q = qs[S.step];
+    const fb = S.answered ? feedback(pts[q.id] > 0, pts[q.id] > 0 ? "Right +2" : `Wrong. The answer: ${q.answer ? "Yes" : "No"}`, q.why) : "";
+    p.innerHTML = `<div class="step">Checklist · question ${S.step + 1} of 5</div>
+      <div class="q">${q.text}</div>${q.hint ? `<div class="hint">${q.hint}</div>` : ""}
+      <div class="btns">${["Yes", "No"].map(v => `<button class="choice${S.choice === v ? " picked" : ""}" data-v="${v}" ${S.answered ? "disabled" : ""}>${v}</button>`).join("")}</div>
+      ${fb}${S.answered ? nextBtn() : ""}`;
+    p.querySelectorAll("button.choice").forEach(b => b.onclick = () => {
+      S.choice = b.dataset.v; S.answered = true;
+      pts[q.id] = ((b.dataset.v === "Yes") === q.answer) ? 2 : 0;
+      S.overlays[q.overlay] = true; render(); focusFb();
+    });
+  } else if (stepId === "pivot" || stepId === "stop") {
+    const isPivot = stepId === "pivot", m = c.m;
+    const title = isPivot ? "Where is the ceiling (pivot)?" : "Where does the stop-loss go?";
+    const hint = isPivot ? "Tap the chart at the price where you would buy when price breaks out. You can tap again to change it. Then confirm."
+      : "Imagine the stock breaks the ceiling. Tap the level where you put your stop. Then confirm.";
+    let fb = "";
+    if (S.answered) {
+      const v = S.picks[stepId], adrPx = m.peak * m.adr / 100;
+      if (isPivot) {
+        const d = (v - m.peak) / adrPx, ok = pts.pivot > 0;
+        const base = m.base_days === 0 ? `There is no base here, so the ceiling is just today's high of ${nf(m.peak)}. That alone tells you the stock has not rested.`
+          : `The ceiling is the highest price in the base: ${nf(m.peak)}. That is where you buy when price breaks up, at the high of the opening range. The white line on the chart is the ceiling.`;
+        fb = feedback(ok, ok ? "Right +5" : "Not quite",
+          `${base} You picked ${nf(v)}, ${nf(Math.abs(d), 2)} ADR ${d >= 0 ? "above" : "below"} the ceiling. The game counts up to 0.5 ADR away as right.`);
+      } else {
+        const ok = pts.stop > 0, under = (m.peak - v) / adrPx;
+        let why = `The stop goes at the low of the buy day, and never further away than 1 ADR. The ceiling is ${nf(m.peak)} and the ADR is ${nf(m.adr, 1)} %, so the stop belongs between ${nf(m.stop_max)} and ${nf(m.peak)}. The red band on the chart shows the zone.`;
+        why += v >= m.peak ? ` You picked ${nf(v)}, which is above the ceiling. You would be stopped out before you even bought.`
+          : ok ? ` You picked ${nf(v)}, ${nf(under, 1)} ADR below the ceiling. Good.`
+          : ` You picked ${nf(v)}, ${nf(under, 1)} ADR below the ceiling. That is too far away, and the risk per trade gets too big.`;
+        fb = feedback(ok, ok ? "Right +5" : "Not quite", why);
+      }
+    }
+    p.innerHTML = `<div class="step">${isPivot ? "Tap the chart · the ceiling" : "Tap the chart · the stop"}</div>
+      <div class="q">${title}</div><div class="hint">${hint}</div>
+      ${S.answered ? "" : `<div class="btns"><button class="go" id="confirm" ${S.pick == null ? "disabled" : ""}>${S.pick == null ? "Tap the chart first" : `Confirm ${nf(S.pick)}`}</button></div>`}
+      ${fb}${S.answered ? nextBtn() : ""}`;
+    const cb = $("#confirm");
+    if (cb) cb.onclick = () => {
+      const v = S.pick; S.picks[stepId] = v; S.pick = null; S.answered = true;
+      const adrPx = m.peak * m.adr / 100;
+      if (isPivot) { pts.pivot = Math.abs(v - m.peak) <= 0.5 * adrPx ? 5 : 0; S.overlays.pivot = true; }
+      else { pts.stop = v < m.peak && v >= m.stop_max ? 5 : 0; S.overlays.zone = true; }
+      render(); focusFb();
+    };
+  } else if (stepId === "decision") {
+    const right = KIND[c.kind];
+    const fb = S.answered ? feedback(pts.decision > 0, pts.decision > 0 ? `Right +10: ${right}` : `Wrong. The answer: ${right}`, c.text.decision) : "";
+    p.innerHTML = `<div class="step">Decision</div>
+      <div class="q">What do you do today?</div>
+      <div class="hint">The ceiling and the stop zone stay on the chart.</div>
+      <div class="btns">${["Buy", "Wait", "Skip"].map(v => `<button class="choice${S.choice === v ? " picked" : ""}" data-v="${v}" ${S.answered ? "disabled" : ""}>${v}</button>`).join("")}</div>
+      ${fb}${S.answered ? `<div><button class="go" id="next">Show what happened →</button></div>` : ""}`;
+    p.querySelectorAll("button.choice").forEach(b => b.onclick = () => {
+      S.choice = b.dataset.v; S.answered = true; pts.decision = b.dataset.v === right ? 10 : 0; render(); focusFb();
+    });
+    if ($("#next")) $("#next").onclick = next;
+  } else {
+    revealPanel(c);
+  }
+  if (S.step < 7 && $("#next")) $("#next").onclick = next;
+}
+
+const LABEL = { move: "Move", rest: "Rest", lows: "Lows", tight: "Tight", ma: "MA", pivot: "Ceiling", stop: "Stop", decision: "Decision" };
+function revealPanel(c) {
+  const m = c.m, pts = S.pts[S.round], e = c.entry;
+  const sum = Object.values(pts).reduce((a, b) => a + b, 0);
+  let maxGain = null;
+  if (e && e.k != null) { let h = -Infinity; for (let i = e.k; i < c.bars.length; i++) h = Math.max(h, c.bars[i][1]); maxGain = Math.round(100 * (h / e.price - 1)); }
+  const maOk = m.close > m.s10 && m.close > m.s20 && m.s10_up && m.s20_up;
+  const rows = [
+    ["Move before the rest", `+${m.prior_move} % in ${m.pole_days} d`, m.prior_move >= 30],
+    ["Rest since the top", `${m.base_days} trading days`, m.base_days >= 10 && m.base_days <= 42],
+    ["Depth of the base", `${nf(m.depth, 1)} %`, null],
+    ["Higher lows", m.higher_lows ? "yes" : "no", m.higher_lows],
+    ["Last 5 days", `${nf(m.range5, 1)} % = ${nf(m.tight_adr, 1)} ADR`, m.tight_adr <= 2],
+    ["Above rising 10/20 MA", maOk ? "yes" : "no", maOk],
+    ["Distance to 10 MA", `${nf(m.ext, 1)} ADR`, m.ext <= 2.5],
+    ["ADR (normal daily move)", `${nf(m.adr, 1)} %`, null],
+    ["Traded per day", `$${m.dollar_vol}M`, m.dollar_vol >= 20],
+    ["Ceiling (pivot)", nf(m.peak), null],
+    ["Stop at most 1 ADR down", nf(m.stop_max), null]
+  ];
+  const mark = v => v == null ? "" : v ? `<span style="color:var(--signal)">✓</span>` : `<span style="color:var(--red)">✗</span>`;
+  const last = S.round === 4;
+  $("#panel").innerHTML = `<div class="reveal-head"><div class="step">Answer · ${KIND_LABEL[c.kind]}</div>
+      <h2>${esc(c.ticker)}</h2><div class="mono hint">Decision day ${fDate(c.date)} · right answer: ${KIND[c.kind]}</div></div>
+    <div class="fb ok"><div class="verdict">What happened next</div><p>${c.text.reveal}</p>
+      ${e && maxGain != null && c.kind !== "skip" && c.kind !== "wait" ? `<p class="hint mono">Breakout ${fDate(e.date)} · stop ${nf(e.low)} · at most +${maxGain} % within 30 days</p>` : ""}</div>
+    <table class="tbl"><tbody>${rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${mark(r[2])}</td></tr>`).join("")}</tbody></table>
+    <div class="score">${STEPS.slice(0, 8).map(k => `<span>${LABEL[k]}</span><span>${pts[k] || 0}</span>`).join("")}<span class="tot">This round</span><span class="tot">${sum} / 30</span></div>
+    <div><button class="go" id="next">${last ? "See your result →" : "Next round →"}</button></div>`;
+  $("#next").onclick = nextRound;
+}
+
+function feedback(ok, head, body) {
+  return `<div class="fb${ok ? " ok" : ""}" id="fb" tabindex="-1"><div class="verdict">${head}</div><p>${body}</p></div>`;
+}
+const nextBtn = () => `<div><button class="go" id="next">Next →</button></div>`;
+function focusFb() {
+  const f = $("#fb"); if (!f) return;
+  f.focus({ preventScroll: true });
+  f.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
+}
+
+function next() {
+  S.step++; S.answered = false; S.choice = null; S.pick = null;
+  if (STEPS[S.step] === "lows" || STEPS[S.step] === "pivot") S.zoom = true;
+  if (STEPS[S.step] === "reveal") return startReveal();
+  render(); window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function startReveal() {
+  const c = cur(); S.overlays = { pole: true, base: true, lows: true, tight: true, ma: true, pivot: true, zone: true };
+  S.revealN = c.dk + 1; render(); window.scrollTo({ top: 0, behavior: "smooth" });
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const tick = () => { if (!S || S.revealN == null) return; S.revealN = Math.min(c.bars.length, S.revealN + 1); draw(); if (S.revealN < c.bars.length) setTimeout(tick, 45); };
+  if (reduce) { S.revealN = c.bars.length; draw(); } else setTimeout(tick, 300);
+}
+function nextRound() {
+  if (S.round === 4) {
+    S.screen = "end";
+    const best = store.get("bg-best", null), tot = total();
+    if (best == null || tot > best) store.set("bg-best", tot);
+    store.set("bg-played", played() + 1);
+    return render();
+  }
+  S.round++; S.step = 0; S.answered = false; S.choice = null; S.pick = null; S.picks = {}; S.overlays = {}; S.revealN = null; S.zoom = false;
+  render(); window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function endScreen() {
+  const tot = total(), best = store.get("bg-best", tot);
+  const rows = S.cases.map((c, r) => { const p = S.pts[r]; return `<tr><td>${r + 1}. ${esc(c.ticker)} · ${KIND[c.kind]}</td><td>${Object.values(p).reduce((a, b) => a + b, 0)} / 30</td><td>${p.decision ? `<span style="color:var(--signal)">✓</span>` : `<span style="color:var(--red)">✗</span>`}</td></tr>`; }).join("");
+  const msg = tot >= 130 ? "You read charts like a pro. Really strong." : tot >= 100 ? "Good reading. Look at the explanations where you lost points." : tot >= 70 ? "A good start. Play again and see if you spot the patterns faster." : "Every round teaches you something. Play again and read the explanations closely.";
+  const left = Math.max(0, FREE_GAMES - played()), hasEmail = !!store.get("bg-email", null);
+  $("#app").innerHTML = `<div class="intro">
+    <div class="step">Your result</div>
+    <div class="big">${tot}<span style="font-size:.35em;color:var(--muted)"> / 150</span></div>
+    <p>${msg}${best > tot ? ` Your best is ${best}.` : ""}</p>
+    <table class="tbl"><tbody>${rows}</tbody></table>
+    ${!hasEmail ? `<p class="hint">${left > 0 ? `${left} free game${left === 1 ? "" : "s"} left.` : "Your free games are used. Add your email to keep playing, still free."}</p>` : ""}
+    <div class="btns"><button class="go" id="again">Play again</button><button id="home">Home</button></div>
+    ${SUBSTACK ? `<p class="hint">Want the setups explained every week? <a href="${SUBSTACK}" target="_blank" rel="noopener">Read Ticker Central on Substack</a>.</p>` : ""}
+  </div>`;
+  $("#again").onclick = start;
+  $("#home").onclick = intro;
+}
+
+// ---------- Boot ----------
+(async () => {
+  const links = [SUBSTACK && `<a href="${SUBSTACK}" target="_blank" rel="noopener">Newsletter</a>`, INSTAGRAM && `<a href="${INSTAGRAM}" target="_blank" rel="noopener">Instagram</a>`].filter(Boolean);
+  if (links.length) $("#footlinks").innerHTML = links.join(" · ");
+  try { await loadIndex(); } catch (e) { $("#app").innerHTML = `<p class="err">Could not load the game. Refresh the page to try again.</p>`; return; }
+  intro();
+})();
+</script>
+</body>
+</html>
