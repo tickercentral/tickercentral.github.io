@@ -107,7 +107,7 @@ button.picked { border-color: var(--fg); }
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 // ---------- Settings ----------
-const API = "";            // n8n webhook URL that remembers which charts an email has seen ("" = this browser only)
+const API = "https://banna.app.n8n.cloud/webhook/breakout-game";            // n8n webhook URL that remembers which charts an email has seen ("" = this browser only)
 const SUBSTACK = "";       // e.g. "https://tickercentral.substack.com"
 const INSTAGRAM = "";      // e.g. "https://instagram.com/tickercentral"
 const FREE_CHARTS = 3;     // charts (rounds) before the email is needed
@@ -462,7 +462,7 @@ function gate(resume) {
     if (!$("#consent").checked) { err.hidden = false; err.textContent = "Tick the box to continue."; return; }
     $("#gsend").disabled = true; $("#gsend").textContent = "Saving…";
     const res = await api({ action: "join", email, consent: true, add: seenLocal() });
-    if (API && !res) { $("#gsend").disabled = false; $("#gsend").textContent = "Continue"; err.hidden = false; err.textContent = "Could not save right now. Try again in a minute."; return; }
+    // if the server does not answer (down, or the monthly limit is used up) the player still gets in
     if (res && Array.isArray(res.seen)) store.set("bg-seen", [...new Set(seenLocal().concat(res.seen))]);
     store.set("bg-email", email);
     if (resume) { $("#app").innerHTML = ""; resume(); } else start();
