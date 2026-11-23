@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MarketIQ</title>
+<meta name="description" content="Check real stocks the way the best growth investors do: earnings, price, volume, leadership and the market. Then decide: buy, wait or skip. A free training game by Ticker Central.">
+<meta property="og:title" content="MarketIQ">
+<meta property="og:description" content="Real stocks. No ticker, no date. Would you have bought it?">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: trading-terminal console. Chart sticks to the top on phones, the question panel scrolls under it; side by side on wide screens. */
+:root {
+  --bg: #05070A; --panel: #0D1117; --line: #1E2833; --fg: #F2F6F5; --muted: #8A97A0;
+  --signal: #00FF9D; --signal-pale: #0F2A22; --amber: #FFB020; --cyan: #29E0FF; --violet: #B070FF;
+  --red: #FF3B4E; --desk: #FFDCA8;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+a { color: var(--cyan); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: max(14px, env(safe-area-inset-top, 0px)) 40px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.brand { font-family: var(--display); font-size: 22px; letter-spacing: .02em; color: var(--fg); text-decoration: none; }
+.brand b { color: var(--signal); }
+.brand small { font: 400 11px var(--mono); color: var(--muted); letter-spacing: .06em; margin-left: 8px; }
+.hud { font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; gap: 14px; }
+.hud strong { color: var(--fg); font-weight: 600; }
+.game { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .game { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
+.chartbox { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-bottom: 6px; }
+.chart { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; touch-action: manipulation; position: relative; }
+.chart .ov { position: absolute; left: 0; top: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+.ohlc { min-height: 34px; padding: 0 2px 4px; font: 11px/1.5 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adr { font: 600 12px/1.4 var(--mono); color: var(--desk); padding: 0 2px 6px; font-variant-numeric: tabular-nums; }
+.adr span { color: var(--muted); font-weight: 400; }
+.ohlc b { color: var(--fg); } .ohlc i { font-style: normal; }
+.chart.picking { outline: 2px solid var(--amber); cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); padding-top: 6px; }
+.legend .mini { margin-left: auto; min-height: 30px; padding: 4px 10px; font: 600 12px var(--mono); border-color: var(--cyan); color: var(--cyan); }
+.legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+.panel { display: grid; gap: 12px; min-width: 0; }
+.step { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.q { font-family: var(--display); font-size: 21px; line-height: 1.25; }
+.hint { color: var(--muted); font-size: 14px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: 600 15px var(--body); color: var(--fg); background: var(--panel); border: 1px solid #33414F; border-radius: 6px; padding: 12px 18px; cursor: pointer; min-height: 46px; }
+button:hover:not(:disabled) { border-color: var(--signal); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: default; }
+button.go { background: var(--signal); color: #04110B; border-color: var(--signal); }
+button.go:hover:not(:disabled) { background: #5CFFC2; }
+button.choice { flex: 1 1 100px; }
+button.picked { border-color: var(--fg); }
+.fb { border: 1px solid var(--line); border-left: 4px solid var(--amber); background: var(--panel); border-radius: 6px; padding: 12px 14px; display: grid; gap: 6px; }
+.fb.ok { border-left-color: var(--signal); }
+.fb .verdict { font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--amber); }
+.fb.ok .verdict { color: var(--signal); }
+.fb p { margin: 0; }
+.reveal-head { display: grid; gap: 4px; }
+.reveal-head h2 { font-size: 30px; color: var(--signal); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl td { padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tbl td:nth-child(2) { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.tbl td:last-child { text-align: right; width: 34px; }
+.score { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-family: var(--mono); font-size: 13px; }
+.score .tot { color: var(--signal); font-weight: 600; border-top: 1px solid var(--line); padding-top: 4px; }
+.intro { max-width: 680px; display: grid; gap: 16px; padding-top: 8px; }
+.intro h1 { font-size: clamp(34px, 8vw, 54px); line-height: 1; }
+.intro h1 span { color: var(--signal); }
+.intro ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.points { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.points div { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 13px; color: var(--muted); }
+.points b { display: block; font-family: var(--mono); color: var(--signal); font-size: 20px; }
+.big { font-family: var(--display); font-size: clamp(56px, 16vw, 96px); color: var(--signal); line-height: 1; }
+.gate { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: grid; gap: 12px; }
+.gate input[type=email] { font: 16px var(--body); color: var(--fg); background: var(--bg); border: 1px solid #33414F; border-radius: 6px; padding: 12px; width: 100%; min-height: 46px; }
+.gate label { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); cursor: pointer; }
+.gate input[type=checkbox] { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--signal); }
+.err { color: var(--red); font-size: 14px; }
+.foot { margin-top: 36px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); display: grid; gap: 4px; }
+.loading { color: var(--muted); font-family: var(--mono); padding: 40px 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* MarketIQ additions */
+.data { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; display: grid; gap: 6px; }
+.data h3 { font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.data table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data th { font: 400 11px var(--mono); color: var(--muted); text-align: right; padding: 2px 4px 6px; }
+.data th:first-child, .data td:first-child { text-align: left; }
+.data td { padding: 6px 4px; border-top: 1px solid var(--line); font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.data td:not(:first-child) { white-space: nowrap; }
+.data td.g { color: var(--signal); } .data td.r { color: var(--red); }
+.data .row { display: flex; justify-content: space-between; gap: 12px; font-family: var(--mono); font-size: 13px; padding: 4px 0; border-top: 1px solid var(--line); }
+.data .row:first-of-type { border-top: 0; }
+.data .row b { font-weight: 600; }
+.spy svg { display: block; width: 100%; height: auto; }
+/* right / wrong */
+.fb.bad { border-left-color: var(--red); }
+.fb .verdict { font-size: 18px; display: flex; align-items: center; gap: 10px; }
+.fb.bad .verdict { color: var(--red); }
+.fb .ic { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 50%; background: var(--amber); color: #04110B; font-size: 17px; font-weight: 700; animation: pop .35s ease-out; }
+.fb.ok .ic { background: var(--signal); }
+.fb.bad .ic { background: var(--red); color: #fff; }
+@keyframes pop { 0% { transform: scale(.5); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); } }
+.hud .r { color: var(--signal); } .hud .w { color: var(--red); }
+.score .y { color: var(--signal); } .score .n { color: var(--red); }
+/* end screen */
+.result { display: grid; gap: 6px; }
+.grade { font-family: var(--display); font-size: clamp(26px, 6vw, 36px); line-height: 1.1; }
+.newbest { display: inline-block; font: 700 13px var(--mono); letter-spacing: .08em; background: var(--signal); color: #04110B; border-radius: 4px; padding: 4px 8px; animation: pop .4s ease-out; justify-self: start; }
+.acc { height: 14px; border-radius: 7px; background: var(--signal-pale); overflow: hidden; border: 1px solid var(--line); }
+.acc i { display: block; height: 100%; background: var(--signal); width: 0; transition: width 1s ease-out; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tiles div { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 13px; color: var(--muted); }
+.tiles b { display: block; font: 700 26px var(--mono); }
+.dots { display: inline-flex; gap: 4px; vertical-align: middle; }
+.dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--red); }
+.dots i.y { background: var(--signal); }
+.missing { font-size: 13px; color: var(--muted); border: 1px dashed #33414F; border-radius: 6px; padding: 8px 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="./">MARKET<b>IQ</b><small>by Ticker Central</small></a>
+    <div class="hud" id="hud"></div>
+  </div>
+  <div id="app"><div class="loading">Loading…</div></div>
+  <div class="foot">
+    <div><b>Education only. Not financial advice.</b> The stocks are real US stocks and the numbers are what was known on the decision day. What happened before says nothing about what happens next.</div>
+    <div id="footlinks"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+// ---------- Settings ----------
+const API = "https://banna.app.n8n.cloud/webhook/breakout-game";   // same n8n webhook as the Breakout Game ("" = this browser only)
+const SUBSTACK = "https://substack.com/@tickercentral";
+const INSTAGRAM = "https://www.instagram.com/ticker.central/";
+const BREAKOUT = "../";    // the Breakout Game, one folder up
+const FREE_CHARTS = 3;     // rounds before the email is needed (skipped if the email was given in the Breakout Game)
+
+const KIND = { buy: "Buy", buyfail: "Buy", wait: "Wait", skip: "Skip" };
+const KIND_LABEL = { buy: "A complete stock that worked", buyfail: "A complete stock where the stop was hit", wait: "A strong stock in a falling market", skip: "The earnings were not there" };
+const STOP_PCT = 8, TARGET_PCT = 20;
+
+// ---------- Helpers ----------
+const $ = s => document.querySelector(s);
+const nf = (x, d = 2) => Number(x).toFixed(d).replace("-", "−");
+const sg = x => (x >= 0 ? "+" : "−") + Math.abs(x);
+const usd = x => (x < 0 ? "−$" : "$") + nf(Math.abs(x));
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fDate = iso => { const [y, m, d] = iso.split("-"); return `${MON[+m - 1]} ${+d}, ${y}`; };
+const fMonth = iso => { const [y, m] = iso.split("-"); return `${MON[+m - 1]} ${y}`; };
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+// ---------- Cases ----------
+let INDEX = [];
+async function loadIndex() { INDEX = await (await fetch("cases/index.json", { cache: "no-cache" })).json(); }
+const getCase = id => fetch(`cases/${id}.json`).then(r => { if (!r.ok) throw new Error(id); return r.json(); });
+
+// ---------- Remembering seen stocks (this browser + the email list shared with the Breakout Game) ----------
+const seenLocal = () => store.get("sp-seen", []);
+async function api(body) {
+  if (!API) return null;
+  try {
+    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(body) });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+async function syncSeen(add) {
+  const email = store.get("bg-email", null);
+  if (!email) return;
+  const res = await api({ action: "seen", email, add });
+  if (res && Array.isArray(res.seen)) store.set("sp-seen", [...new Set(seenLocal().concat(res.seen))]);
+}
+
+// ---------- Game state ----------
+let S;
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+// Every game: 2 stocks that worked, 1 where the stop was hit, 1 Wait, 1 Skip. Stocks you have seen are never picked again.
+async function newGame() {
+  const seen = new Set(seenLocal()), ids = [];
+  for (const [kind, n] of [["buy", 2], ["buyfail", 1], ["wait", 1], ["skip", 1]]) {
+    const all = INDEX.filter(x => x[1] === kind).map(x => x[0]);
+    let fresh = all.filter(id => !seen.has(id));
+    if (fresh.length < n) fresh = all;
+    ids.push(...shuffle(fresh).slice(0, n));
+  }
+  shuffle(ids);
+  const cases = await Promise.all(ids.map(getCase));
+  store.set("sp-seen", [...seen, ...ids]);
+  syncSeen(ids);
+  S = { screen: "round", cases, round: 0, step: 0, answered: false, pts: cases.map(() => ({})), overlays: {}, pick: null, picks: {}, choice: null, revealN: null };
+}
+const cur = () => S.cases[S.round];
+const total = () => S ? S.pts.reduce((s, r) => s + Object.values(r).reduce((a, b) => a + b, 0), 0) : 0;
+
+// ---------- The six checks ----------
+const QLABEL = ["Latest quarter", "3 months before", "6 months before", "9 months before"];
+const YLABEL = ["Latest year", "1 year before", "2 years before"];
+const gtxt = g => g == null ? "n/a" : `${sg(g)} %`;
+function quarterTable(c, show) {
+  const q = c.eps.q.slice().reverse();
+  return `<div class="data"><h3>Earnings per share, by quarter</h3><table><thead><tr><th></th><th>This quarter</th><th>Same quarter a year earlier</th>${show ? "<th>Change</th>" : ""}</tr></thead><tbody>`
+    + q.map((x, k) => `<tr><td>${isRevealed() ? fMonth(x.end) : QLABEL[k]}</td><td>${usd(x.eps)}</td><td>${x.prev == null ? "n/a" : usd(x.prev)}</td>${show ? `<td class="${x.g != null && x.g >= 25 ? "g" : "r"}">${gtxt(x.g)}</td>` : ""}</tr>`).join("")
+    + `</tbody></table></div>`;
+}
+function yearTable(c, show) {
+  const y = c.eps.y.slice().reverse();
+  return `<div class="data"><h3>Earnings per share, by year</h3><table><thead><tr><th></th><th>This year</th><th>Year before</th>${show ? "<th>Change</th>" : ""}</tr></thead><tbody>`
+    + y.map((x, k) => `<tr><td>${isRevealed() ? "FY " + x.end.slice(0, 4) : YLABEL[k]}</td><td>${usd(x.eps)}</td><td>${x.prev == null ? "n/a" : usd(x.prev)}</td>${show ? `<td class="${x.g != null && x.g >= 25 ? "g" : "r"}">${gtxt(x.g)}</td>` : ""}</tr>`).join("")
+    + `</tbody></table></div>`;
+}
+function leaderBox(c) {
+  const m = c.m;
+  return `<div class="data"><h3>Past 12 months</h3>
+    <div class="row"><span>This stock</span><b>${sg(m.ret12)} %</b></div>
+    <div class="row"><span>To be in the top 20 % of all stocks you needed</span><b>${sg(m.top20)} %</b></div>
+    <div class="row"><span>The middle stock</span><b>${sg(m.mid)} %</b></div></div>`;
+}
+// The S&P 500 as a small line chart with its 50-day average
+function spyBox(c) {
+  const s = c.spy, n = isRevealed() ? Math.min(s.c.length, s.dk + 1 + (S.revealN - c.dk - 1)) : s.dk + 1;
+  const pts = s.c.slice(0, n), ma = s.ma50.slice(0, n), all = s.c.concat(s.ma50.filter(v => v != null));
+  const lo = Math.min(...all) * 0.995, hi = Math.max(...all) * 1.005, W = 600, H = 170, N = s.c.length;
+  const X = i => 6 + i * (W - 60) / (N - 1), Y = v => 8 + (H - 24) * (1 - (v - lo) / (hi - lo));
+  const path = a => a.map((v, i) => v == null ? null : `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).filter(Boolean).join(" ");
+  const xd = X(s.dk);
+  return `<div class="data spy"><h3>The market: S&amp;P 500, past 6 months</h3>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="S&P 500 line chart with its 50-day average">
+      <rect x="${xd}" y="0" width="${W - 54 - xd}" height="${H - 14}" fill="#29E0FF" fill-opacity="${isRevealed() ? .05 : 0}"/>
+      <polyline points="${path(ma)}" fill="none" stroke="${COL.ma50}" stroke-width="2"/>
+      <polyline points="${path(pts)}" fill="none" stroke="${COL.fg}" stroke-width="2"/>
+      <line x1="${xd}" x2="${xd}" y1="0" y2="${H - 14}" stroke="${COL.muted}" stroke-dasharray="3 4"/>
+      <text x="${xd - 4}" y="${H - 2}" fill="${COL.muted}" font-family="JetBrains Mono, monospace" font-size="12" text-anchor="end">decision day</text>
+      <text x="${X(pts.length - 1) + 6}" y="${Y(pts[pts.length - 1]) + 4}" fill="${COL.fg}" font-family="JetBrains Mono, monospace" font-size="12">S&amp;P</text>
+    </svg>
+    <div class="legend" style="padding:0"><span><i style="background:${COL.fg}"></i>S&amp;P 500</span><span><i style="background:${COL.ma50}"></i>50-day average</span></div></div>`;
+}
+
+function questions(c) {
+  const m = c.m, f = c.f, q = c.eps.q[c.eps.q.length - 1], y = c.eps.y.slice(-3), yg = y.map(x => x.g);
+  const okY = yg.filter(g => g != null), avg = okY.length === 3 ? Math.round(okY.reduce((a, b) => a + b, 0) / 3) : null;
+  const ylist = y.map(x => x.g == null ? (x.eps <= 0 ? "a loss" : "no comparison (a loss the year before)") : `${sg(x.g)} %`).join(", ");
+  return [
+    { id: "pm", name: "Profit Momentum", text: "Did the latest quarter's earnings grow at least 25 % from the same quarter a year earlier?",
+      hint: "Compare the top row: this quarter against the same quarter a year earlier. 25 % more means at least 1.25 times as much.",
+      data: show => quarterTable(c, show), answer: f.pm,
+      why: (q.prev <= 0 ? `A year earlier the company lost money (${usd(q.prev)} a share), so there is no growth to measure. ` + (q.eps > 0 ? `It is profitable now, which is a start, but the rule wants real growth from a profit.` : `And it is still losing money (${usd(q.eps)}).`)
+        : q.eps <= 0 ? `The company lost money in the latest quarter (${usd(q.eps)} a share).`
+        : `From ${usd(q.prev)} to ${usd(q.eps)} is ${gtxt(q.g)}.`)
+        + ` The rule: at least +25 %, and the best stocks often show +40 % to +100 % or more. Growth that speeds up from quarter to quarter is even better.`
+        + (f.pm ? "" : " Strong stocks are driven by strong earnings. Without them, a rising price has little to stand on.") },
+    { id: "bq", name: "Business Quality", text: "Have yearly earnings grown about 25 % a year or more for 3 years, with no down year?",
+      hint: "One good quarter is not enough. Check each of the three years: did it grow, and by how much?",
+      data: show => yearTable(c, show), answer: f.bq,
+      why: `The three years, newest first: ${y.slice().reverse().map(x => x.g == null ? (x.eps <= 0 ? "a loss" : "no comparison") : `${sg(x.g)} %`).join(", ")}.`
+        + (avg != null ? ` That is ${sg(avg)} % a year on average.` : " A year with a loss breaks the record.")
+        + ` The rule: about 25 % a year or more, three years in a row, with no year going backwards. It shows the business is strong, not just lucky for one quarter.` },
+    { id: "ps", name: "Price Structure", text: "Is the price within 15 % of its 52-week high?", overlay: "ps",
+      hint: "The chart shows exactly one year. Find the highest point, then compare it with today's price on the far right.",
+      answer: f.ps,
+      why: `The 52-week high is ${usd(m.hi52)} and the price today is ${usd(m.close)}, ${nf(m.dist, 1)} % below the high. The white line on the chart is the high, the green band is the top 15 %.`
+        + (f.ps ? ` Stocks near their highs have no sellers waiting above them from earlier tops. Leaders are bought near new highs, not after a big drop.` : ` That is too far down. A stock this far below its high has many earlier buyers waiting to sell when price gets back to where they bought.`) },
+    { id: "mf", name: "Money Flow", text: "Over the last 50 days, was there more volume on up days than on down days?", overlay: "mf",
+      hint: "The chart is zoomed in on the last 50 days, with the volume made big. Green bars are up days, red bars are down days. Do the green bars outweigh the red?",
+      answer: f.mf,
+      why: `On the ${m.updays} up days ${nf(m.upvol, 1)}M shares traded, on the down days ${nf(m.downvol, 1)}M. That is ${nf(m.ratio, 2)} times as much on up days.`
+        + (f.mf ? ` Big buyers leave footprints: heavy volume when the price rises, light volume when it dips.` : ` More shares change hands when the price falls. That is selling, not buying.`) },
+    { id: "lr", name: "Leadership Rank", text: "Is it a leader: is it in the top 20 % of all US stocks over the past 12 months?",
+      hint: "Leadership is relative. In a weak year +10 % can be enough, in a hot year even +60 % may not be. Compare the stock with what it took to be in the top 20 % that year.",
+      data: () => leaderBox(c), answer: f.lr,
+      why: `It rose ${sg(m.ret12)} %, and the top 20 % started at ${sg(m.top20)} %. So its Leadership Rank was ${Math.min(99, m.rs)}: it did better than ${Math.min(99, m.rs)} % of more than 3,000 US stocks.`
+        + (f.lr ? ` The rule: 80 or higher. You want the leaders, not the stocks that are cheap because nobody wants them.` : ` The rule is 80 or higher. Laggards rarely turn into leaders.`) },
+    { id: "mt", name: "Market Tide", text: "Is the market in an uptrend: the S&P 500 above a rising 50-day average?",
+      hint: "Look at the small chart of the S&P 500. Is the white line above the purple one, and is the purple one rising?",
+      data: () => spyBox(c), answer: f.mt,
+      why: `The S&P 500 was ${nf(m.spy, 1)} and its 50-day average ${nf(m.spy50, 1)}, ${m.spy50 > m.spy50_prev ? "rising" : "falling"} (${nf(m.spy50_prev, 1)} two weeks earlier).`
+        + (f.mt ? ` The tide is lifting stocks.` : ` The market is falling.`) + ` Three out of four stocks follow the market, so even the best stock fights a falling market.` }
+  ];
+}
+const STEPS = ["pm", "bq", "ps", "mf", "lr", "mt", "stop", "decision", "reveal"];
+const NQ = 6;
+
+// ---------- The chart ----------
+const COL = { up: "#00FF9D", down: "#FF3B4E", ma50: "#B070FF", ma200: "#FFB020", grid: "#151D26", muted: "#8A97A0", fg: "#F2F6F5", desk: "#FFDCA8", amber: "#FFB020", signal: "#00FF9D", red: "#FF3B4E", cyan: "#29E0FF" };
+const LW = window.LightweightCharts;
+const T0 = 946857600;
+const tOf = i => T0 + i * 86400, iOf = t => Math.round((t - T0) / 86400);
+const MS = { Solid: 0, Dotted: 1, Dashed: 2 };
+let CH = null;
+const chartH = w => w < 520 ? Math.round(Math.min(380, Math.max(290, w * 0.85))) : Math.round(Math.min(500, w * 0.62));
+const isRevealed = () => S && S.revealN != null;
+function relLabel(i) {
+  const c = cur(); if (!c || !c.dates[i]) return "";
+  if (isRevealed()) { const [y, mo] = c.dates[i].split("-"); return `${MON[+mo - 1]} ${y.slice(2)}`; }
+  const r = i - c.dk, a = Math.abs(r), s = r < 0 ? "−" : "+";
+  if (r === 0) return "decision";
+  if (a < 42) return `${s}${Math.round(a / 5)} w`;
+  return `${s}${Math.round(a / 21)} mo`;
+}
+function crossLabel(i) {
+  const c = cur(); if (!c || !c.dates[i]) return "";
+  if (isRevealed()) return fDate(c.dates[i]);
+  const r = i - c.dk;
+  return r === 0 ? "decision day" : `${r < 0 ? "−" : "+"}${Math.abs(r)} trading days`;
+}
+
+function buildChart() {
+  const box = $("#chart"), c = cur();
+  if (CH) { try { CH.chart.remove(); } catch (e) {} CH.ro && CH.ro.disconnect(); }
+  box.innerHTML = `<svg class="ov" id="ov"></svg>`;
+  const w = Math.max(280, box.clientWidth);
+  box.style.height = chartH(w) + "px";
+  const chart = LW.createChart(box, {
+    width: w, height: chartH(w),
+    layout: { background: { type: "solid", color: "#0D1117" }, textColor: COL.muted, fontFamily: "JetBrains Mono, ui-monospace, monospace", fontSize: 11 },
+    grid: { vertLines: { color: COL.grid }, horzLines: { color: COL.grid } },
+    rightPriceScale: { borderColor: "#1E2833", scaleMargins: { top: 0.08, bottom: 0.2 } },
+    timeScale: { borderColor: "#1E2833", rightOffset: 4, minBarSpacing: 0.8, tickMarkFormatter: t => relLabel(iOf(t)) },
+    localization: { locale: "en-US", timeFormatter: t => crossLabel(iOf(t)), priceFormatter: p => nf(p, p < 100 ? 2 : 1) },
+    crosshair: { mode: LW.CrosshairMode.Normal, vertLine: { color: "#5A6B78", labelBackgroundColor: "#1E2833" }, horzLine: { color: "#5A6B78", labelBackgroundColor: "#1E2833" } },
+    handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+    handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: false }, axisDoubleClickReset: true },
+    watermark: { visible: true, text: "?", color: "rgba(138,151,160,0.07)", fontSize: 72, fontFamily: "Chakra Petch, sans-serif", horzAlign: "center", vertAlign: "center" }
+  });
+  const line = (color, width) => chart.addLineSeries({ color, lineWidth: width, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
+  const vol = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, lastValueVisible: false, priceLineVisible: false });
+  chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+  const ma200 = line(COL.ma200, 1), ma50 = line(COL.ma50, 1);
+  const candle = chart.addCandlestickSeries({ upColor: COL.up, downColor: COL.down, borderVisible: false, wickUpColor: COL.up, wickDownColor: COL.down, priceLineVisible: false,
+    autoscaleInfoProvider: orig => { const r = orig(); if (r && S && S.overlays.stopzone && !isRevealed()) r.priceRange.minValue = Math.min(r.priceRange.minValue, cur().m.close * 0.9); return r; } });
+  CH = { chart, candle, vol, ma50, ma200, box, n: 0, round: S.round, game: S.cases, lines: [], view: null };
+  const volCol = i => { const up = i === 0 ? c.bars[i][3] >= c.bars[i][0] : c.bars[i][3] >= c.bars[i - 1][3]; const hot = S.overlays.mf && i > c.dk - 50 && i <= c.dk; return up ? `rgba(0,255,157,${hot ? .75 : .3})` : `rgba(255,59,78,${hot ? .75 : .3})`; };
+  CH.bar = i => { const [o, h, l, cl, v] = c.bars[i]; return { c: { time: tOf(i), open: o, high: h, low: l, close: cl }, v: { time: tOf(i), value: v, color: volCol(i) },
+    m50: c.ma50[i] == null ? { time: tOf(i) } : { time: tOf(i), value: c.ma50[i] }, m200: c.ma200[i] == null ? { time: tOf(i) } : { time: tOf(i), value: c.ma200[i] } }; };
+  CH.setAll = n => { const a = []; for (let i = 0; i < n; i++) a.push(CH.bar(i)); candle.setData(a.map(b => b.c)); vol.setData(a.map(b => b.v)); ma50.setData(a.map(b => b.m50)); ma200.setData(a.map(b => b.m200)); CH.n = n; CH.mfOn = !!S.overlays.mf; };
+  CH.setAll(c.dk + 1);
+  const redraw = () => requestAnimationFrame(overlay);
+  chart.timeScale().subscribeVisibleLogicalRangeChange(redraw);
+  chart.timeScale().subscribeSizeChange(redraw);
+  chart.subscribeCrosshairMove(p => ohlc(p));
+  chart.subscribeClick(onChartClick);
+  CH.ro = new ResizeObserver(() => { const nw = Math.max(280, box.clientWidth); if (Math.abs(nw - chart.options().width) > 1) { box.style.height = chartH(nw) + "px"; chart.applyOptions({ width: nw, height: chartH(nw) }); redraw(); } });
+  CH.ro.observe(box);
+}
+
+function draw() {
+  const box = $("#chart"); if (!box || !S) return;
+  const c = cur(), m = c.m, ov = S.overlays;
+  if (!CH || CH.box !== box || CH.round !== S.round || CH.game !== S.cases) buildChart();
+  if (CH.mfOn !== !!ov.mf && !isRevealed()) CH.setAll(c.dk + 1);
+  const target = isRevealed() ? S.revealN : c.dk + 1;
+  while (CH.n < target) { const b = CH.bar(CH.n); CH.candle.update(b.c); CH.vol.update(b.v); CH.ma50.update(b.m50); CH.ma200.update(b.m200); CH.n++; }
+  CH.chart.applyOptions({ watermark: isRevealed() ? { text: c.ticker, color: "rgba(0,255,157,0.10)" } : { text: "?", color: "rgba(138,151,160,0.07)" } });
+  CH.lines.forEach(l => CH.candle.removePriceLine(l)); CH.lines = [];
+  const pl = (price, color, title, style = MS.Solid, width = 1) => CH.lines.push(CH.candle.createPriceLine({ price, color, lineWidth: width, lineStyle: style, axisLabelVisible: true, title }));
+  if (ov.ps) pl(m.hi52, COL.fg, "52-week high", MS.Solid, 2);
+  if (STEPS[S.step] === "stop" || S.step > 6) pl(m.close, COL.cyan, "buy", MS.Dashed);
+  if (ov.stopzone) { pl(m.stop, COL.red, "−8 %"); }
+  if (isRevealed()) pl(m.target, COL.signal, "+20 %", MS.Dashed);
+  if (S.picks.stop != null) pl(S.picks.stop, COL.desk, STEPS[S.step] === "stop" ? "your stop" : "", MS.Dashed);
+  if (S.pick != null) pl(S.pick, COL.amber, "stop?", MS.Dashed, 2);
+  // three views: the whole year, Money Flow (last 50 days with big volume bars), and the answer
+  const view = isRevealed() ? "reveal" : STEPS[S.step] === "mf" ? "mf" : "all";
+  if (CH.view !== view) {
+    CH.view = view;
+    const mf = view === "mf";
+    CH.chart.priceScale("vol").applyOptions({ scaleMargins: { top: mf ? 0.42 : 0.8, bottom: 0 } });
+    CH.chart.priceScale("right").applyOptions({ scaleMargins: { top: 0.06, bottom: mf ? 0.62 : 0.2 } });
+    CH.chart.timeScale().setVisibleLogicalRange(view === "reveal" ? { from: -1, to: c.bars.length + 3 } : mf ? { from: c.dk - 51, to: c.dk + 2 } : { from: -1, to: c.dk + 5 });
+  }
+  ohlc(null);
+  requestAnimationFrame(overlay);
+  box.classList.toggle("picking", STEPS[S.step] === "stop" && !S.answered);
+}
+
+function ohlc(p) {
+  const el = $("#ohlc"); if (!el || !CH) return;
+  const c = cur();
+  let i = p && p.time != null ? iOf(p.time) : CH.n - 1;
+  if (i < 0 || i >= CH.n) i = CH.n - 1;
+  const [o, h, l, cl, v] = c.bars[i], prev = i ? c.bars[i - 1][3] : o, ch = 100 * (cl / prev - 1);
+  const col = cl >= o ? "var(--signal)" : "var(--red)";
+  const vs = v >= 1e6 ? nf(v / 1e6, 1) + "M" : nf(v / 1e3, 0) + "K";
+  el.innerHTML = `<b>${isRevealed() ? esc(c.ticker) : "???"}</b> · 1D · <span>${crossLabel(i)}</span><br>`
+    + `O <i style="color:${col}">${nf(o)}</i> H <i style="color:${col}">${nf(h)}</i> L <i style="color:${col}">${nf(l)}</i> C <i style="color:${col}">${nf(cl)}</i> <i style="color:${col}">${ch >= 0 ? "+" : ""}${nf(ch)} %</i> · Vol ${vs}`;
+}
+
+function overlay() {
+  if (!CH || !S || S.screen !== "round") return;
+  const svg = $("#ov"); if (!svg) return;
+  const c = cur(), m = c.m, ov = S.overlays, ts = CH.chart.timeScale();
+  const W = CH.box.clientWidth - CH.chart.priceScale("right").width(), H = CH.box.clientHeight - ts.height();
+  svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const X = i => ts.logicalToCoordinate(i), Y = p => CH.candle.priceToCoordinate(p);
+  if (X(c.dk) == null || Y(m.close) == null) { svg.innerHTML = ""; return; }
+  const cw = Math.max(1, (X(c.dk) - X(c.dk - 10)) / 10), out = [];
+  const t = (x, y, s, col, anchor = "start", size = 11, weight = 600) =>
+    out.push(`<text x="${x}" y="${y}" fill="${col}" font-family="JetBrains Mono, monospace" font-size="${size}" font-weight="${weight}" text-anchor="${anchor}" paint-order="stroke" stroke="#0D1117" stroke-width="3">${s}</text>`);
+  if (isRevealed()) {
+    const x0 = X(c.dk) + cw / 2;
+    out.push(`<rect x="${x0}" y="0" width="${Math.max(0, W - x0)}" height="${H}" fill="#29E0FF" fill-opacity=".04"/>`);
+    out.push(`<line x1="${x0}" x2="${x0}" y1="0" y2="${H}" stroke="${COL.muted}" stroke-dasharray="3 4"/>`);
+    t(x0 + 4, H - 6, "after the decision →", COL.muted, "start", 10, 400);
+    if (m.hit_k != null && m.hit_k < S.revealN) {
+      const x = X(m.hit_k), y = Y(m.hit === "target" ? m.target : m.stop), col = m.hit === "target" ? COL.signal : COL.red;
+      out.push(`<circle cx="${x}" cy="${y}" r="6" fill="none" stroke="${col}" stroke-width="2.5"/>`);
+      t(x, m.hit === "target" ? y - 12 : y + 20, m.hit === "target" ? "+20 % reached" : "stop hit", col, "middle");
+    }
+  }
+  if (ov.ps && CH.view !== "mf") {
+    const y0 = Y(m.hi52), y1 = Y(m.hi52 * 0.85);
+    out.push(`<rect x="0" y="${y0}" width="${X(c.dk) + cw}" height="${Math.max(0, y1 - y0)}" fill="${COL.signal}" fill-opacity=".07"/>`);
+    t(4, y1 - 4, "within 15 % of the high", COL.signal, "start", 10);
+    const xh = X(m.hi52_k);
+    if (xh != null) out.push(`<polygon points="${xh},${y0 - 3} ${xh - 5},${y0 - 12} ${xh + 5},${y0 - 12}" fill="${COL.fg}"/>`);
+  }
+  if (ov.mf) {
+    const x0 = X(c.dk - 49) - cw / 2, x1 = X(c.dk) + cw / 2;
+    out.push(`<rect x="${x0}" y="0" width="${x1 - x0}" height="${H}" fill="${COL.cyan}" fill-opacity=".06" stroke="${COL.cyan}" stroke-opacity=".5" stroke-dasharray="4 3"/>`);
+    t(x0 + 4, 14, "last 50 days", COL.cyan, "start", 10);
+  }
+  svg.innerHTML = out.join("");
+}
+
+function onChartClick(p) {
+  if (!(S && STEPS[S.step] === "stop" && !S.answered && p && p.point)) return;
+  const price = CH.candle.coordinateToPrice(p.point.y);
+  if (price == null) return;
+  S.pick = Math.round(price * 100) / 100;
+  draw(); panel(cur());
+}
+
+// ---------- Screens ----------
+function hud() {
+  if (!S || S.screen !== "round") { $("#hud").innerHTML = ""; return; }
+  const all = S.pts.flatMap(p => Object.values(p)), yes = all.filter(v => v > 0).length;
+  $("#hud").innerHTML = `<span>Round <strong>${S.round + 1}</strong>/5</span><span>Score <strong>${total()}</strong></span><span><span class="r">✓ ${yes}</span> <span class="w">✗ ${all.length - yes}</span></span>`;
+}
+const played = () => store.get("sp-played", 0);
+const charts = () => store.get("sp-charts", 0);
+const needsEmail = () => charts() >= FREE_CHARTS && !store.get("bg-email", null);
+const leftText = () => { const l = Math.max(0, FREE_CHARTS - charts()); return l > 0 ? `${l} free stock${l === 1 ? "" : "s"} left. Then add your email to keep playing, still free.` : "Add your email to keep playing. Still free."; };
+
+function intro() {
+  S = null; hud();
+  const best = store.get("sp-best", null);
+  $("#app").innerHTML = `<div class="intro">
+    <h1>Check the stock.<br><span>Make the call.</span></h1>
+    <p>Five real US stocks per game, picked from 10 years of about 2,700 stocks. Each one stops on a decision day. You see the chart, the earnings and the market as they were that day, but not the name or the date. You never get the same stock twice.</p>
+    <ol>
+      <li><b>Six checks.</b> Profit Momentum, Business Quality, Price Structure, Money Flow, Leadership Rank and Market Tide. Yes or no.</li>
+      <li><b>The stop.</b> Tap the chart where your stop-loss goes.</li>
+      <li><b>The decision.</b> Buy, Wait or Skip.</li>
+    </ol>
+    <p>After every answer you get the explanation right away. After the decision the chart rolls forward 3 months and you see what happened.</p>
+    <p class="missing">Ticker Central checks seven things. The seventh, Ownership Trend (are big investors buying?), is not in the game: there is no free record of it going back 10 years.</p>
+    <div class="points">
+      <div><b>+2</b>per right check</div>
+      <div><b>+8</b>stop in the right place</div>
+      <div><b>+10</b>right decision</div>
+    </div>
+    <p class="hint">Max 30 points per round, 150 per game. You score for checking the stock right, not for how it turned out.${best != null ? ` Your best so far: <b class="mono">${best}</b> of 150.` : ""}</p>
+    <div class="btns"><button class="go" id="start">${played() ? "Play a new game" : "Start the first game"}</button></div>
+    ${!store.get("bg-email", null) ? `<p class="hint">${leftText()}</p>` : ""}
+    <p class="hint">Prefer pure chart reading? <a href="${BREAKOUT}">Play the Breakout Game</a>.</p>
+  </div>`;
+  $("#start").onclick = start;
+}
+
+async function start() {
+  if (needsEmail()) return gate();
+  $("#app").innerHTML = `<div class="loading">Picking five stocks…</div>`;
+  try { await newGame(); } catch (e) { $("#app").innerHTML = `<div class="intro"><p class="err">Could not load the stocks. Check your connection and try again.</p><div><button class="go" id="retry">Try again</button></div></div>`; $("#retry").onclick = start; return; }
+  $("#app").innerHTML = ""; render(); window.scrollTo({ top: 0 });
+}
+
+function gate(resume) {
+  if (!resume) S = null;
+  $("#hud").innerHTML = "";
+  $("#app").innerHTML = `<div class="intro">
+    <h1>Keep <span>playing.</span></h1>
+    <p>You have played your ${FREE_CHARTS} free stocks. Add your email to keep going. It is still free${resume ? ", and this game continues right where you left off" : ""}.</p>
+    <form class="gate" id="gate" novalidate>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required aria-label="Email">
+      <div class="err" id="gerr" hidden></div>
+      <div><button class="go" type="submit" id="gsend">Subscribe &amp; keep playing</button></div>
+      <p class="hint" style="margin:0">You'll get the free Ticker Central newsletter, and we remember which stocks you've seen so you always get new ones. Unsubscribe at any time. We never sell or share your email.</p>
+    </form>
+  </div>`;
+  $("#gate").onsubmit = async ev => {
+    ev.preventDefault();
+    const email = $("#email").value.trim().toLowerCase(), err = $("#gerr");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.hidden = false; err.textContent = "That email doesn't look right."; return; }
+    $("#gsend").disabled = true; $("#gsend").textContent = "Saving…";
+    const res = await api({ action: "join", email, consent: true, add: seenLocal() });
+    // if the server does not answer (down, or the monthly limit is used up) the player still gets in
+    if (res && Array.isArray(res.seen)) store.set("sp-seen", [...new Set(seenLocal().concat(res.seen))]);
+    store.set("bg-email", email);
+    if (resume) { $("#app").innerHTML = ""; resume(); } else start();
+  };
+}
+
+function render() {
+  hud();
+  if (S.screen === "end") return endScreen();
+  if (!$("#chart")) {
+    $("#app").innerHTML = `<div class="game">
+      <div class="chartbox"><div class="ohlc" id="ohlc"></div><div class="chart" id="chart"></div>
+        <div class="legend"><span><i style="background:${COL.ma50}"></i>50-day avg</span><span><i style="background:${COL.ma200}"></i>200-day avg</span><span>one year of daily candles · drag = move · pinch = zoom</span></div></div>
+      <div class="panel" id="panel"></div></div>`;
+  }
+  draw();
+  panel(cur());
+}
+
+function panel(c) {
+  const p = $("#panel"), stepId = STEPS[S.step], pts = S.pts[S.round];
+  if (S.step < NQ) {
+    const q = questions(c)[S.step];
+    if (q.overlay === "mf") S.overlays.mf = true;     // the 50-day window helps while answering
+    if (q.overlay === "mf") draw();
+    const fb = S.answered ? feedback(pts[q.id] > 0, pts[q.id] > 0 ? "Right! +2" : `Wrong. The answer is ${q.answer ? "Yes" : "No"}`, q.why) : "";
+    p.innerHTML = `<div class="step">Check ${S.step + 1} of ${NQ} · ${q.name}</div>
+      <div class="q">${q.text}</div>${q.hint ? `<div class="hint">${q.hint}</div>` : ""}
+      ${q.data ? q.data(S.answered) : ""}
+      <div class="btns">${["Yes", "No"].map(v => `<button class="choice${S.choice === v ? " picked" : ""}" data-v="${v}" ${S.answered ? "disabled" : ""}>${v}</button>`).join("")}</div>
+      ${fb}${S.answered ? nextBtn() : ""}`;
+    p.querySelectorAll("button.choice").forEach(b => b.onclick = () => {
+      S.choice = b.dataset.v; S.answered = true;
+      pts[q.id] = ((b.dataset.v === "Yes") === q.answer) ? 2 : 0;
+      if (q.overlay) S.overlays[q.overlay] = true;
+      render(); focusFb();
+    });
+  } else if (stepId === "stop") {
+    const m = c.m;
+    let fb = "";
+    if (S.answered) {
+      const v = S.picks.stop, loss = 100 * (1 - v / m.close), ok = pts.stop > 0;
+      let why = `The rule: cut every loss at 7–8 % below what you paid, no exceptions. Bought at ${usd(m.close)}, the stop goes no lower than ${usd(m.stop)}. The red line on the chart is −8 %.`;
+      why += v >= m.close ? ` You picked ${usd(v)}, above the buy price. You would be stopped out right away.`
+        : ok ? ` You picked ${usd(v)}, ${nf(loss, 1)} % below. Good.`
+        : loss > STOP_PCT ? ` You picked ${usd(v)}, ${nf(loss, 1)} % below. That is too far. A big loss takes a much bigger gain to win back: −25 % needs +33 %.`
+        : ` You picked ${usd(v)}, only ${nf(loss, 1)} % below. Normal daily swings would knock you out. Give it room down to 7–8 %.`;
+      fb = feedback(ok, ok ? "Right! +8" : "Wrong. 0 points", why);
+    }
+    p.innerHTML = `<div class="step">Tap the chart · the stop</div>
+      <div class="q">Say you buy at today's close of ${usd(m.close)}. Where does your stop-loss go?</div>
+      <div class="hint">The blue dashed line is your buy price. Tap the chart at the price where you would sell to cut the loss. You can tap again to change it. Then confirm.</div>
+      ${S.answered ? "" : `<div class="btns"><button class="go" id="confirm" ${S.pick == null ? "disabled" : ""}>${S.pick == null ? "Tap the chart first" : `Confirm ${usd(S.pick)}`}</button></div>`}
+      ${fb}${S.answered ? nextBtn() : ""}`;
+    const cb = $("#confirm");
+    if (cb) cb.onclick = () => {
+      const v = S.pick, loss = 100 * (1 - v / m.close);
+      S.picks.stop = v; S.pick = null; S.answered = true;
+      pts.stop = loss >= 5 && loss <= STOP_PCT + 0.3 ? 8 : 0;
+      S.overlays.stopzone = true;
+      render(); focusFb();
+    };
+  } else if (stepId === "decision") {
+    const right = KIND[c.kind];
+    const fb = S.answered ? feedback(pts.decision > 0, pts.decision > 0 ? `Right! +10 · ${right}` : `Wrong. The answer is ${right}`, decisionText(c)) : "";
+    p.innerHTML = `<div class="step">Decision</div>
+      <div class="q">What do you do today?</div>
+      <div class="hint">Buy: everything checks out. Wait: a good stock, but now is the wrong time. Skip: the stock itself is not good enough.</div>
+      <div class="btns">${["Buy", "Wait", "Skip"].map(v => `<button class="choice${S.choice === v ? " picked" : ""}" data-v="${v}" ${S.answered ? "disabled" : ""}>${v}</button>`).join("")}</div>
+      ${fb}${S.answered ? `<div><button class="go" id="next">Show what happened →</button></div>` : ""}`;
+    p.querySelectorAll("button.choice").forEach(b => b.onclick = () => {
+      S.choice = b.dataset.v; S.answered = true; pts.decision = b.dataset.v === right ? 10 : 0; render(); focusFb();
+    });
+  } else {
+    revealPanel(c);
+  }
+  if (S.step < 8 && $("#next")) $("#next").onclick = next;
+}
+
+const NAMES = { pm: "Profit Momentum", bq: "Business Quality", ps: "Price Structure", mf: "Money Flow", lr: "Leadership Rank", mt: "Market Tide" };
+function failList(c) { return Object.keys(NAMES).filter(k => !c.f[k]).map(k => NAMES[k]); }
+function decisionText(c) {
+  const m = c.m, q = c.eps.q[c.eps.q.length - 1];
+  if (c.kind === "buy" || c.kind === "buyfail")
+    return `All six checks pass: earnings up ${gtxt(q.g)} in the latest quarter and growing for three years, the price ${nf(m.dist, 1)} % from its high, more volume on up days, a Leadership Rank of ${Math.min(99, m.rs)}, and a rising market. This is the kind of stock the method is looking for. The plan: buy, and put the stop 8 % below the buy price.`;
+  if (c.kind === "wait")
+    return `The stock itself is strong: growing earnings, near its high and a leader${c.f.mf ? ", with buyers behind it" : ""}. But the market is falling: the S&P 500 is below a falling 50-day average. Three out of four stocks follow the market, so even great stocks tend to drop in a correction. The right move: put it on the watchlist and buy when the market turns up again.`;
+  const f = failList(c);
+  return `${f.join(" and ")} ${f.length > 1 ? "fail" : "fails"}. `
+    + (!c.f.pm || !c.f.bq ? `Earnings are the fuel. A stock can run for a while on hope, but the big winners almost always had strong, growing earnings first. ` : "")
+    + `Skip it. There are thousands of stocks; only buy the ones that pass.`;
+}
+function revealText(c) {
+  const m = c.m, end = `After 3 months it was ${Math.abs(m.chg60)} % ${m.chg60 >= 0 ? "higher" : "lower"} than on the decision day.`;
+  const days = m.hit_k != null ? m.hit_k - c.dk : null;
+  if (c.kind === "buy") return `It reached +20 % after ${days} trading days, before the 8 % stop was hit. The rule here: take most of the profit at +20–25 %. ${end}`;
+  if (c.kind === "buyfail") return `The 8 % stop was hit after ${days} trading days. ${end} The decision was still right, because every check passed. Not every good stock works, and the stop keeps a miss small: one +20 % win pays for two −8 % losses.`;
+  const lesson = c.kind === "wait" ? "In a falling market the odds are against you, even with a great stock." : "Without the earnings, the odds are against you.";
+  if (m.hit === "stop") return `Bought on the decision day, the 8 % stop would have been hit after ${days} trading days. ${end} ${lesson}`;
+  if (m.hit === "target") return `It reached +20 % after ${days} trading days anyway. Sometimes it works. But the rules are about the odds over many trades. ${lesson} ${end}`;
+  return `It moved between ${sg(m.maxloss)} % and ${sg(m.maxgain)} % without hitting the stop or the +20 % target. ${end} ${lesson}`;
+}
+
+function revealPanel(c) {
+  const m = c.m, pts = S.pts[S.round], sum = Object.values(pts).reduce((a, b) => a + b, 0);
+  const qs = questions(c);
+  const mark = v => v ? `<span style="color:var(--signal)">✓</span>` : `<span style="color:var(--red)">✗</span>`;
+  const q = c.eps.q[c.eps.q.length - 1], y = c.eps.y.slice(-3);
+  const val = { pm: gtxt(q.g), bq: y.map(x => x.g == null ? "loss" : sg(x.g)).join(" / ") + " %", ps: `${nf(m.dist, 1)} % below`, mf: `${nf(m.ratio, 2)}×`, lr: String(Math.min(99, m.rs)), mt: m.spy > m.spy50 ? "above" : "below" };
+  const last = S.round === 4;
+  $("#panel").innerHTML = `<div class="reveal-head"><div class="step">Answer · ${KIND_LABEL[c.kind]}</div>
+      <h2>${esc(c.ticker)}</h2><div class="mono hint">Decision day ${fDate(c.date)} · right answer: ${KIND[c.kind]}</div></div>
+    <div class="fb ok"><div class="verdict">What happened next</div><p>${revealText(c)}</p>
+      <p class="hint mono">Within 3 months: at most ${sg(m.maxgain)} %, at worst ${sg(m.maxloss)} %</p></div>
+    <table class="tbl"><tbody>${qs.map(x => `<tr><td>${x.name}</td><td>${val[x.id]}</td><td>${mark(c.f[x.id])}</td></tr>`).join("")}
+      <tr><td>Ownership Trend</td><td>not in the game</td><td></td></tr></tbody></table>
+    ${spyBox(c)}
+    <div class="score">${qs.map(x => [x.name, pts[x.id]]).concat([["Stop", pts.stop], ["Decision", pts.decision]]).map(([n, v]) => `<span>${v ? "✓" : "✗"} ${n}</span><span class="${v ? "y" : "n"}">${v ? "+" + v : "0"}</span>`).join("")}<span class="tot">This round</span><span class="tot">${sum} / 30</span></div>
+    <div><button class="go" id="next">${last ? "See your result →" : "Next round →"}</button></div>`;
+  $("#next").onclick = nextRound;
+}
+
+function feedback(ok, head, body) { return `<div class="fb ${ok ? "ok" : "bad"}" id="fb" tabindex="-1"><div class="verdict"><span class="ic">${ok ? "✓" : "✗"}</span>${head}</div><p>${body}</p></div>`; }
+const nextBtn = () => `<div><button class="go" id="next">Next →</button></div>`;
+function focusFb() {
+  const f = $("#fb"); if (!f) return;
+  f.focus({ preventScroll: true });
+  f.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
+}
+
+function next() {
+  S.step++; S.answered = false; S.choice = null; S.pick = null;
+  if (STEPS[S.step] === "reveal") return startReveal();
+  render(); window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function startReveal() {
+  const c = cur(); S.overlays = { ps: true, stopzone: true };
+  S.revealN = c.dk + 1; render(); window.scrollTo({ top: 0, behavior: "smooth" });
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const tick = () => {
+    if (!S || S.revealN == null || cur() !== c) return;
+    S.revealN = Math.min(c.bars.length, S.revealN + 1); draw();
+    const sb = document.querySelector("#panel .spy"); if (sb) sb.outerHTML = spyBox(c);
+    if (S.revealN < c.bars.length) setTimeout(tick, 35);
+  };
+  if (reduce) { S.revealN = c.bars.length; draw(); const sb = document.querySelector("#panel .spy"); if (sb) sb.outerHTML = spyBox(c); } else setTimeout(tick, 300);
+}
+function nextRound() {
+  store.set("sp-charts", charts() + 1);
+  if (S.round === 4) {
+    S.screen = "end";
+    const best = store.get("sp-best", null), tot = total();
+    S.newBest = best != null && tot > best;
+    if (best == null || tot > best) store.set("sp-best", tot);
+    store.set("sp-played", played() + 1);
+    return render();
+  }
+  S.round++; S.step = 0; S.answered = false; S.choice = null; S.pick = null; S.picks = {}; S.overlays = {}; S.revealN = null;
+  if (needsEmail()) { window.scrollTo({ top: 0 }); return gate(() => { render(); window.scrollTo({ top: 0 }); }); }
+  render(); window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+const ORDER = ["pm", "bq", "ps", "mf", "lr", "mt", "stop", "decision"];
+function endScreen() {
+  const tot = total(), best = store.get("sp-best", tot);
+  const all = S.pts.flatMap(p => ORDER.map(k => p[k] || 0)), yes = all.filter(v => v > 0).length, pct = Math.round(100 * yes / all.length);
+  const count = keys => S.pts.reduce((n, p) => n + keys.filter(k => p[k] > 0).length, 0);
+  const checks = count(ORDER.slice(0, 6)), stops = count(["stop"]), decs = count(["decision"]);
+  const grade = tot >= 130 ? "Elite. You check stocks like a pro." : tot >= 100 ? "Strong. You know what to look for." : tot >= 70 ? "Solid start. The patterns are coming." : "Keep training. Every round teaches you something.";
+  const col = (n, max) => n / max >= 0.8 ? "var(--signal)" : n / max >= 0.5 ? "var(--amber)" : "var(--red)";
+  const rows = S.cases.map((c, r) => { const p = S.pts[r], sum = ORDER.reduce((a, k) => a + (p[k] || 0), 0);
+    return `<tr><td>${r + 1}. ${esc(c.ticker)} · ${KIND[c.kind]}<br><span class="dots">${ORDER.map(k => `<i class="${p[k] > 0 ? "y" : ""}"></i>`).join("")}</span></td><td>${sum} / 30</td><td>${p.decision ? `<span style="color:var(--signal)">✓</span>` : `<span style="color:var(--red)">✗</span>`}</td></tr>`; }).join("");
+  $("#app").innerHTML = `<div class="intro">
+    <div class="result">
+      <div class="step">Your result</div>
+      ${S.newBest ? `<span class="newbest">NEW PERSONAL BEST</span>` : ""}
+      <div class="big">${tot}<span style="font-size:.35em;color:var(--muted)"> / 150</span></div>
+      <div class="grade">${grade}</div>
+    </div>
+    <div class="result">
+      <p style="margin:0"><b style="color:var(--signal)">${yes} right</b> and <b style="color:var(--red)">${all.length - yes} wrong</b> out of ${all.length} answers · <b>${pct} %</b></p>
+      <div class="acc"><i id="accbar"></i></div>
+    </div>
+    <div class="tiles">
+      <div><b style="color:${col(checks, 30)}">${checks}/30</b>checks right</div>
+      <div><b style="color:${col(stops, 5)}">${stops}/5</b>stops right</div>
+      <div><b style="color:${col(decs, 5)}">${decs}/5</b>decisions right</div>
+    </div>
+    <table class="tbl"><tbody>${rows}</tbody></table>
+    ${best > tot ? `<p class="hint">Your best is ${best} of 150. Can you beat it?</p>` : ""}
+    ${!store.get("bg-email", null) ? `<p class="hint">${leftText()}</p>` : ""}
+    <div class="btns"><button class="go" id="again">Play again</button><button id="home">Home</button></div>
+    <p class="hint">Want to train pure chart reading? <a href="${BREAKOUT}">Play the Breakout Game</a>.</p>
+    ${SUBSTACK ? `<p class="hint">Want stocks like these explained every week? <a href="${SUBSTACK}" target="_blank" rel="noopener">Read Ticker Central on Substack</a>.</p>` : ""}
+  </div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => { const b = $("#accbar"); if (b) b.style.width = pct + "%"; }));
+  $("#again").onclick = start;
+  $("#home").onclick = intro;
+}
+
+// ---------- Boot ----------
+(async () => {
+  const links = [SUBSTACK && `<a href="${SUBSTACK}" target="_blank" rel="noopener">Newsletter</a>`, INSTAGRAM && `<a href="${INSTAGRAM}" target="_blank" rel="noopener">Instagram</a>`].filter(Boolean);
+  if (links.length) $("#footlinks").innerHTML = links.join(" · ");
+  try { await loadIndex(); } catch (e) { $("#app").innerHTML = `<p class="err">Could not load the game. Refresh the page to try again.</p>`; return; }
+  intro();
+})();
+</script>
+</body>
+</html>
