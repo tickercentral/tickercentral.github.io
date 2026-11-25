@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MarketIQ</title>
 <meta name="description" content="Check real stocks the way the best growth investors do: earnings, price, volume, leadership and the market. Then decide: buy, wait or skip. A free training game by Ticker Central.">
-<meta property="og:title" content="MarketIQ">
+<meta property="og:title" content="MarketIQ: test your stock skills">
 <meta property="og:description" content="Real stocks. No ticker, no date. Would you have bought it?">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -81,7 +81,7 @@ button.picked { border-color: var(--fg); }
 .intro h1 { font-size: clamp(34px, 8vw, 54px); line-height: 1; }
 .intro h1 span { color: var(--signal); }
 .intro ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
-.points { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.points { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .points div { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; font-size: 13px; color: var(--muted); }
 .points b { display: block; font-family: var(--mono); color: var(--signal); font-size: 20px; }
 .big { font-family: var(--display); font-size: clamp(56px, 16vw, 96px); color: var(--signal); line-height: 1; }
@@ -230,16 +230,10 @@ function pickRules() {
   store.set("sp-rules", [...seen, ...pick.map(r => r.id)]);
   return shuffle(pick);
 }
-// For each round: which checks are asked the other way round (so the answer is No for a good stock).
-// Half of the questions on average, with 2 to 4 Yes answers per round, so there is no pattern to learn.
+// The other four checks have their own answer buttons (Up days / Down days and so on), so they need no reversed wording.
 function pickFlips(c) {
-  const ids = ["pm", "bq", "ps", "mf", "lr", "mt"];
-  for (let t = 0; t < 50; t++) {
-    const fl = Object.fromEntries(ids.map(k => [k, Math.random() < 0.5]));
-    const nYes = ids.filter(k => c.f[k] !== fl[k]).length;
-    if (nYes >= 2 && nYes <= 4) return fl;
-  }
-  return Object.fromEntries(ids.map(k => [k, false]));
+  // Yes/No checks: asked the straight or the reversed way at random. The others: buttons in random order.
+  return Object.fromEntries(["pm", "bq", "ps", "mf", "lr", "mt"].map(k => [k, Math.random() < 0.5]));
 }
 
 // ---------- The six checks ----------
@@ -283,43 +277,43 @@ function questions(c) {
   const okY = yg.filter(g => g != null), avg = okY.length === 3 ? Math.round(okY.reduce((a, b) => a + b, 0) / 3) : null;
   const ylist = y.map(x => x.g == null ? (x.eps <= 0 ? "a loss" : "no comparison (a loss the year before)") : `${sg(x.g)} %`).join(", ");
   return [
-    { id: "pm", name: "Profit Momentum", text: "Did the latest quarter's earnings grow at least 25 % from the same quarter a year earlier?",
+    { id: "pm", name: "Profit Momentum", text: "Did profit per share grow at least 25 % in the latest quarter, compared with the same quarter last year?",
       hint: "Compare the top row: this quarter against the same quarter a year earlier. 25 % more means at least 1.25 times as much.",
-      flip: { text: "Did the latest quarter fall short: less than 25 % earnings growth from the same quarter a year earlier, or a loss?" },
+      flip: { text: "In the latest quarter, did profit per share grow less than 25 % from a year earlier, or was it a loss?" },
       data: show => quarterTable(c, show), answer: f.pm,
       why: (q.prev <= 0 ? `A year earlier the company lost money (${usd(q.prev)} a share), so there is no growth to measure. ` + (q.eps > 0 ? `It is profitable now, which is a start, but the rule wants real growth from a profit.` : `And it is still losing money (${usd(q.eps)}).`)
         : q.eps <= 0 ? `The company lost money in the latest quarter (${usd(q.eps)} a share).`
         : `From ${usd(q.prev)} to ${usd(q.eps)} is ${gtxt(q.g)}.`)
         + ` The rule: at least +25 %, and the best stocks often show +40 % to +100 % or more. Growth that speeds up from quarter to quarter is even better.`
         + (f.pm ? "" : " Strong stocks are driven by strong earnings. Without them, a rising price has little to stand on.") },
-    { id: "bq", name: "Business Quality", text: "Have yearly earnings grown about 25 % a year or more for 3 years, with no down year?",
+    { id: "bq", name: "Business Quality", text: "Over the last 3 years, did profit per share grow about 25 % a year, with no year going down?",
       hint: "One good quarter is not enough. Check each of the three years: did it grow, and by how much?",
-      flip: { text: "Is the 3-year earnings record weak: growth well under 25 % a year, a down year, or a loss?" },
+      flip: { text: "Over the last 3 years, was profit growth weak: slow, going down, or a loss?" },
       data: show => yearTable(c, show), answer: f.bq,
       why: `The three years, newest first: ${y.slice().reverse().map(x => x.g == null ? (x.eps <= 0 ? "a loss" : "no comparison") : `${sg(x.g)} %`).join(", ")}.`
         + (avg != null ? ` That is ${sg(avg)} % a year on average.` : " A year with a loss breaks the record.")
         + ` The rule: about 25 % a year or more, three years in a row, with no year going backwards. It shows the business is strong, not just lucky for one quarter.` },
-    { id: "ps", name: "Price Structure", text: "Is the price within 15 % of its 52-week high?", overlay: "ps",
-      flip: { text: "Is the price more than 15 % below its 52-week high?" },
+    { id: "ps", name: "Price Structure", text: "How far is the price from its 52-week high?", overlay: "ps",
+      choices: ["Within 15 %", "More than 15 % below"],
       hint: "The chart shows exactly one year. Find the highest point, then compare it with today's price on the far right.",
       answer: f.ps,
       why: `The 52-week high is ${usd(m.hi52)} and the price today is ${usd(m.close)}, ${nf(m.dist, 1)} % below the high. The white line on the chart is the high, the green band is the top 15 %.`
         + (f.ps ? ` Stocks near their highs have no sellers waiting above them from earlier tops. Leaders are bought near new highs, not after a big drop.` : ` That is too far down. A stock this far below its high has many earlier buyers waiting to sell when price gets back to where they bought.`) },
-    { id: "mf", name: "Money Flow", text: "Over the last 50 days, was there more volume on up days than on down days?", overlay: "mf",
-      flip: { text: "Over the last 50 days, was there more volume on down days than on up days?", hint: "The chart is zoomed in on the last 50 days, with the volume made big. Green bars are up days, red bars are down days. Do the red bars outweigh the green?" },
-      hint: "The chart is zoomed in on the last 50 days, with the volume made big. Green bars are up days, red bars are down days. Do the green bars outweigh the red?",
+    { id: "mf", name: "Money Flow", text: "Over the last 50 days, which had more volume: the up days or the down days?", overlay: "mf",
+      choices: ["Up days", "Down days"],
+      hint: "The chart is zoomed in on the last 50 days, with the volume made big. Green bars are up days, red bars are down days. Which colour outweighs the other?",
       answer: f.mf,
       why: `On the ${m.updays} up days ${nf(m.upvol, 1)}M shares traded, on the down days ${nf(m.downvol, 1)}M. That is ${nf(m.ratio, 2)} times as much on up days.`
         + (f.mf ? ` Big buyers leave footprints: heavy volume when the price rises, light volume when it dips.` : ` More shares change hands when the price falls. That is selling, not buying.`) },
-    { id: "lr", name: "Leadership Rank", text: "Is this stock leading the market: is its RS line rising and near its high?",
-      hint: "The blue line under the price is the RS line: the stock divided by the S&P 500. It rises when the stock does better than the market and falls when it does worse. Is it higher than 3 months ago, and close to its dashed high?",
-      flip: { text: "Is this stock lagging the market: is its RS line falling?", hint: "The blue line under the price is the RS line: the stock divided by the S&P 500. It rises when the stock does better than the market and falls when it does worse. Is it lower than 3 months ago, and well below its dashed high?" },
+    { id: "lr", name: "Leadership Rank", text: "Is this stock leading or lagging the market?",
+      choices: ["Leading", "Lagging"],
+      hint: "The blue line under the price is the RS line: the stock divided by the S&P 500. It rises when the stock does better than the market and falls when it does worse. Leading: the line is higher than 3 months ago and close to its dashed high. Lagging: it is falling and well below it.",
       answer: f.lr,
       why: `Over the past year the stock rose ${sg(m.ret12)} % and the S&P 500 ${sg(m.spy12)} %. Its Leadership Rank was ${Math.min(99, m.rs)}: it did better than ${Math.min(99, m.rs)} % of all US stocks, and the RS line shows it.`
         + (f.lr ? ` The rule: 80 or higher. A rising RS line near its high is a leader's signature, often even before the price breaks out.` : ` The rule is 80 or higher. A falling RS line means the stock keeps losing ground to the market, and laggards rarely turn into leaders.`) },
-    { id: "mt", name: "Market Tide", text: "Is the market in an uptrend: the S&P 500 above a rising 50-day average?",
-      hint: "This question is about the whole market, so the chart now shows the S&P 500 instead of the stock. Is the white line above the purple one, and is the purple one rising?",
-      flip: { text: "Is the market in a correction: the S&P 500 below a falling 50-day average?", hint: "This question is about the whole market, so the chart now shows the S&P 500 instead of the stock. Is the white line below the purple one, and is the purple one falling?" },
+    { id: "mt", name: "Market Tide", text: "Is the market in an uptrend or in a correction?",
+      choices: ["Uptrend", "Correction"],
+      hint: "This question is about the whole market, so the chart now shows the S&P 500 instead of the stock. Uptrend: the white line is above the purple 50-day average and the purple line is rising. Correction: below it, and falling.",
       answer: f.mt,
       why: `The S&P 500 was ${nf(m.spy, 1)} and its 50-day average ${nf(m.spy50, 1)}, ${m.spy50 > m.spy50_prev ? "rising" : "falling"} (${nf(m.spy50_prev, 1)} two weeks earlier).`
         + (f.mt ? ` The tide is lifting stocks.` : ` The market is falling.`) + ` Three out of four stocks follow the market, so even the best stock fights a falling market.` }
@@ -504,31 +498,42 @@ function intro() {
   S = null; hud();
   const best = store.get("sp-best2", null);
   $("#app").innerHTML = `<div class="intro">
-    <h1>Check the stock.<br><span>Make the call.</span></h1>
-    <p>Five real US stocks per game, picked from 10 years of about 2,700 stocks. Each one stops on a decision day. You see the chart, the earnings and the market as they were that day, but not the name or the date. You never get the same stock twice.</p>
-    <ol>
-      <li><b>Six checks.</b> Profit Momentum, Business Quality, Price Structure, Money Flow, Leadership Rank and Market Tide. Yes or no.</li>
-      <li><b>A rule check.</b> One question on the rules and the mindset of winning investors.</li>
-      <li><b>The stop.</b> Tap the chart where your stop-loss goes.</li>
-      <li><b>The decision.</b> Buy, Wait or Skip.</li>
-    </ol>
-    <p>After every answer you get the explanation right away. After the decision the chart rolls forward 3 months and you see what happened.</p>
-    <p class="missing">Ticker Central checks seven things. The seventh, Ownership Trend (are big investors buying?), is not in the game: there is no free record of it going back 10 years.</p>
-    <div class="points">
-      <div><b>+2</b>per right check or rule</div>
-      <div><b>+8</b>stop in the right place</div>
-      <div><b>+10</b>right decision</div>
-    </div>
-    <p class="hint">Max 32 points per round, 160 per game. You score for checking the stock right, not for how it turned out.${best != null ? ` Your best so far: <b class="mono">${best}</b> of 160.` : ""}</p>
-    <div class="btns"><button class="go" id="start">${played() ? "Play a new game" : "Start the first game"}</button></div>
+    <h1>Test your <span>stock skills.</span></h1>
+    <p>An interactive game with real US stocks. No names, no dates: just the chart, the earnings and the market. Would you have bought it?</p>
+    <div class="btns"><button class="go" id="start">${played() ? "Play a new game" : "Start the game"}</button></div>
+    ${best != null ? `<p class="hint">Your best so far: <b class="mono">${best}</b> of 160.</p>` : ""}
     ${!store.get("bg-email", null) ? `<p class="hint">${leftText()}</p>` : ""}
     <p class="hint">Prefer pure chart reading? <a href="${BREAKOUT}">Play the Breakout Game</a>.</p>
   </div>`;
   $("#start").onclick = start;
 }
 
+// How it works: shown after Start, the first time only, so the Start button fits on a phone screen
+function howTo(go) {
+  $("#app").innerHTML = `<div class="intro">
+    <div class="step">How it works</div>
+    <p>Five real US stocks, picked from 10 years of about 2,700 stocks. Each one stops on a decision day. You never get the same stock twice.</p>
+    <ol>
+      <li><b>Six checks.</b> Profit Momentum, Business Quality, Price Structure, Money Flow, Leadership Rank and Market Tide. Yes or no.</li>
+      <li><b>A rule check.</b> One question on the rules and the mindset of winning investors.</li>
+      <li><b>The stop.</b> Tap the chart where your stop-loss goes.</li>
+      <li><b>The decision.</b> Buy, Wait or Skip. Then the chart rolls forward 3 months.</li>
+    </ol>
+    <div class="points">
+      <div><b>+2</b>per right check or rule</div>
+      <div><b>+8</b>stop in the right place</div>
+      <div><b>+10</b>right decision</div>
+    </div>
+    <p class="hint">Max 32 points per round, 160 per game. You score for checking the stock right, not for how it turned out.</p>
+    <p class="missing">Ticker Central checks seven things. The seventh, Ownership Trend (are big investors buying?), is not in the game: there is no free record of it going back 10 years.</p>
+    <div class="btns"><button class="go" id="go">Let's go</button></div>
+  </div>`;
+  window.scrollTo({ top: 0 });
+  $("#go").onclick = () => { store.set("sp-how", true); go(); };
+}
 async function start() {
   if (needsEmail()) return gate();
+  if (!store.get("sp-how", false)) return howTo(start);
   $("#app").innerHTML = `<div class="loading">Picking five stocks…</div>`;
   try { await newGame(); } catch (e) { $("#app").innerHTML = `<div class="intro"><p class="err">Could not load the stocks. Check your connection and try again.</p><div><button class="go" id="retry">Try again</button></div></div>`; $("#retry").onclick = start; return; }
   $("#app").innerHTML = ""; render(); window.scrollTo({ top: 0 });
@@ -583,18 +588,20 @@ function panel(c) {
   const p = $("#panel"), stepId = STEPS[S.step], pts = S.pts[S.round];
   if (S.step < NQ) {
     const q0 = questions(c)[S.step], fl = S.flips[S.round][q0.id];
-    const q = fl ? { ...q0, text: q0.flip.text, hint: q0.flip.hint || q0.hint, answer: !q0.answer } : q0;
+    const q = fl && q0.flip ? { ...q0, text: q0.flip.text, hint: q0.flip.hint || q0.hint, answer: !q0.answer } : q0;
+    const right = q.choices ? (q.answer ? q.choices[0] : q.choices[1]) : (q.answer ? "Yes" : "No");
+    const opts = q.choices ? (fl ? q.choices.slice().reverse() : q.choices) : ["Yes", "No"];   // random button order, so the first button is not always the good answer
     if (q.overlay === "mf") S.overlays.mf = true;     // the 50-day window helps while answering
     if (q.overlay === "mf") draw();
-    const fb = S.answered ? feedback(pts[q.id] > 0, pts[q.id] > 0 ? "Right! +2" : `Wrong. The answer is ${q.answer ? "Yes" : "No"}`, q.why) : "";
+    const fb = S.answered ? feedback(pts[q.id] > 0, pts[q.id] > 0 ? "Right! +2" : `Wrong. The answer is ${right}`, q.why) : "";
     p.innerHTML = `<div class="step">Check ${S.step + 1} of ${NQ} · ${q.name}</div>
       <div class="q">${q.text}</div>${q.hint ? `<div class="hint">${q.hint}</div>` : ""}
       ${q.data ? q.data(S.answered) : ""}
-      <div class="btns">${["Yes", "No"].map(v => `<button class="choice${S.choice === v ? " picked" : ""}" data-v="${v}" ${S.answered ? "disabled" : ""}>${v}</button>`).join("")}</div>
+      <div class="btns">${opts.map(v => `<button class="choice${S.choice === v ? " picked" : ""}" data-v="${v}" ${S.answered ? "disabled" : ""}>${v}</button>`).join("")}</div>
       ${fb}${S.answered ? nextBtn() : ""}`;
     p.querySelectorAll("button.choice").forEach(b => b.onclick = () => {
       S.choice = b.dataset.v; S.answered = true;
-      pts[q.id] = ((b.dataset.v === "Yes") === q.answer) ? 2 : 0;
+      pts[q.id] = b.dataset.v === right ? 2 : 0;
       if (q.overlay) S.overlays[q.overlay] = true;
       render(); focusFb();
     });
